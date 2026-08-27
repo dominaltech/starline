@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDb } from '../../context/DbContext';
+import { Worker } from '../../types';
 import { Plus, Edit2, Phone, Wrench } from 'lucide-react';
 
 export const WorkerManager: React.FC = () => {

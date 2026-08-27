@@ -47,8 +47,6 @@ export const ProductList: React.FC = () => {
     }
   };
 
-  const lowStockCount = products.filter(p => p.stock_qty <= (p.min_stock_alert || 5)).length;
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
       {/* Header & Controls */}

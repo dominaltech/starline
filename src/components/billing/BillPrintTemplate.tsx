@@ -1,6 +1,6 @@
 import React from 'react';
 import { Bill, ShopSettings } from '../../types';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatters';
 
 interface BillPrintTemplateProps {
   bill: Bill;

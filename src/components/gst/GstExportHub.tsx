@@ -40,7 +40,7 @@ export const GstExportHub: React.FC = () => {
     toDate
   };
 
-  const { filteredBills, filteredCreditNotes } = filterDataByPeriod(bills, creditNotes, periodFilter);
+  const { filteredBills } = filterDataByPeriod(bills, creditNotes, periodFilter);
   const gstBills = filteredBills.filter(b => b.bill_type === 'GST' && !b.is_cancelled);
   const b2bBills = gstBills.filter(b => b.customer_gstin && b.customer_gstin.trim().length >= 15);
   const b2csBills = gstBills.filter(b => !b.customer_gstin || b.customer_gstin.trim().length < 15);
@@ -80,12 +80,12 @@ export const GstExportHub: React.FC = () => {
   const handleExportExcel = () => {
     if (returnType === 'GSTR1') {
       const buffer = generateGstr1Excel(bills, creditNotes, settings, periodFilter);
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const filename = `${settings.gstin || '27ADEPW8222B1ZL'}_GSTR1_${selectedYear}-${monthStr}.xlsx`;
       triggerDownload(blob, filename);
     } else {
       const buffer = generateGstr3bExcel(bills, settings, periodFilter);
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const filename = `${settings.gstin || '27ADEPW8222B1ZL'}_GSTR3B_${selectedYear}-${monthStr}.xlsx`;
       triggerDownload(blob, filename);
     }

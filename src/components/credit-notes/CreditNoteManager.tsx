@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useDb } from '../../context/DbContext';
-import { CreditNote } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { NewCreditNoteModal } from './NewCreditNoteModal';
 import { RotateCcw, Plus, Search } from 'lucide-react';

@@ -57,7 +57,7 @@ export function generateGstr1Json(
   settings: ShopSettings,
   filter: GstPeriodFilter
 ): string {
-  const { filteredBills, filteredCreditNotes } = filterDataByPeriod(bills, creditNotes, filter);
+  const { filteredBills } = filterDataByPeriod(bills, creditNotes, filter);
 
   // Only consider GST mode bills for GSTR-1
   const gstBills = filteredBills.filter(b => b.bill_type === 'GST' && !b.is_cancelled);
