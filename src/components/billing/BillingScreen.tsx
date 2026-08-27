@@ -335,28 +335,28 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
       {/* Mode Selector & Action Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-xs">
+      <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 bg-white p-3 sm:p-4 rounded-lg border border-slate-200 shadow-xs">
         {/* Tab switch: Estimate vs GST */}
         <div className="flex bg-slate-100 p-1 rounded-md">
           <button
             onClick={() => setBillType('ESTIMATE')}
-            className={`px-4 py-2 rounded text-xs font-bold transition-all ${
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded text-xs font-bold transition-all text-center ${
               billType === 'ESTIMATE'
                 ? 'bg-[#0F2942] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Estimate (Non-GST Slip)
+            Estimate (Non-GST)
           </button>
           <button
             onClick={() => setBillType('GST')}
-            className={`px-4 py-2 rounded text-xs font-bold transition-all ${
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded text-xs font-bold transition-all text-center ${
               billType === 'GST'
                 ? 'bg-[#0F2942] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            GST Tax Invoice (18% Split)
+            GST Tax Invoice (18%)
           </button>
         </div>
 
@@ -368,10 +368,10 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
         )}
 
         {/* Save and Print Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <button
             onClick={resetForm}
-            className="btn-secondary text-xs px-3 py-2"
+            className="btn-secondary text-xs px-3 py-2 flex-1 sm:flex-none justify-center"
             title="Clear current form"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -379,17 +379,17 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
           </button>
           <button
             onClick={() => handleSaveBill(false)}
-            className="btn-secondary text-xs px-3 py-2 text-slate-800"
+            className="btn-secondary text-xs px-3 py-2 text-slate-800 flex-1 sm:flex-none justify-center"
           >
             <Save className="w-3.5 h-3.5 text-blue-900" />
-            <span>Save Bill</span>
+            <span>Save</span>
           </button>
           <button
             onClick={() => handleSaveBill(true)}
-            className="btn-primary text-xs px-4 py-2"
+            className="btn-primary text-xs px-4 py-2 flex-1 sm:flex-none justify-center"
           >
             <Printer className="w-4 h-4 text-white" />
-            <span>Save & Print (A5)</span>
+            <span>Save & Print</span>
           </button>
         </div>
       </div>
@@ -397,11 +397,11 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
       {/* Main Bill Container — Replicating physical pad layout */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
         {/* Bill Pad Top Header */}
-        <div className="p-6 bg-slate-50/60 border-b border-slate-200">
-          <div className="flex justify-between items-start">
+        <div className="p-4 sm:p-6 bg-slate-50/60 border-b border-slate-200">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
             <div>
-              <div className="flex items-center gap-2 text-red-600 font-black text-xl tracking-tight font-serif">
-                <span className="text-2xl">★</span>
+              <div className="flex items-center gap-2 text-red-600 font-black text-lg sm:text-xl tracking-tight font-serif">
+                <span className="text-xl sm:text-2xl">★</span>
                 <span>{settings.shop_name}</span>
               </div>
               <div className="text-xs text-slate-700 font-medium mt-0.5">
@@ -410,7 +410,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
               <div className="text-xs italic text-slate-600 mt-0.5">{settings.tagline}</div>
             </div>
 
-            <div className="text-right">
+            <div className="text-left sm:text-right">
               <div className="text-xs font-bold text-slate-800">Mob : {settings.mobiles}</div>
               {isGST && (
                 <div className="text-xs font-mono font-bold text-red-700 mt-0.5">
@@ -420,12 +420,12 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-300 flex justify-between items-center">
+          <div className="mt-4 pt-3 border-t border-slate-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <h2 className="text-sm font-black tracking-wider uppercase underline text-slate-900">
               {isGST ? 'TAX INVOICE / CUM RECEIPT' : 'INVOICE / CUM RECEIPT'}
             </h2>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="font-semibold text-slate-700">Date:</span>
                 <input

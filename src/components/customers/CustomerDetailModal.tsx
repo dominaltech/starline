@@ -38,8 +38,8 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({ custom
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full p-6 space-y-6">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full p-4 sm:p-6 space-y-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-start border-b border-slate-200 pb-4">
           <div className="flex items-center gap-3">

@@ -10,7 +10,8 @@ import {
   Star,
   Receipt,
   LayoutGrid,
-  TrendingUp
+  TrendingUp,
+  X
 } from 'lucide-react';
 
 export type NavTab = 'billing' | 'history' | 'customers' | 'inventory' | 'racks' | 'credit-notes' | 'analytics' | 'reports' | 'gst' | 'settings';
@@ -18,9 +19,16 @@ export type NavTab = 'billing' | 'history' | 'customers' | 'inventory' | 'racks'
 interface SidebarProps {
   activeTab: NavTab;
   setActiveTab: (tab: NavTab) => void;
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  activeTab,
+  setActiveTab,
+  mobileOpen,
+  setMobileOpen
+}) => {
   const navItems = [
     { id: 'billing', label: 'New Invoice', icon: Receipt, section: 'Billing' },
     { id: 'history', label: 'Bill History', icon: FileText, section: 'Billing' },
@@ -34,54 +42,84 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'settings', label: 'Settings & Backups', icon: Settings, section: 'System' },
   ];
 
+  const handleSelectTab = (tabId: NavTab) => {
+    setActiveTab(tabId);
+    setMobileOpen(false);
+  };
+
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 h-screen sticky top-0">
-      <div>
-        {/* Brand Header matching physical bill identity */}
-        <div className="p-5 border-b border-slate-200 bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-red-600 flex items-center justify-center text-white shadow-xs shrink-0">
-              <Star className="w-5 h-5 fill-white" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm tracking-tight text-red-600 font-sans">
-                STAR LINE SERVICES
+    <>
+      {/* Mobile Dark Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-xs transition-opacity duration-300"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar Drawer */}
+      <aside
+        className={`fixed lg:sticky top-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 h-screen transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
+        <div>
+          {/* Brand Header */}
+          <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded bg-red-600 flex items-center justify-center text-white shadow-xs shrink-0">
+                <Star className="w-5 h-5 fill-white" />
               </div>
-              <div className="text-[11px] text-slate-500 font-medium leading-tight">
-                Solapur Billing & CRM
+              <div>
+                <div className="font-extrabold text-sm tracking-tight text-red-600 font-sans">
+                  STAR LINE SERVICES
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium leading-tight">
+                  Solapur Billing & CRM
+                </div>
               </div>
             </div>
+
+            {/* Close Button on Mobile Drawer */}
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 lg:hidden"
+              aria-label="Close Navigation Menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
+
+          {/* Navigation links */}
+          <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleSelectTab(item.id as NavTab)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
+                    isActive
+                      ? 'bg-[#0F2942] text-white shadow-xs'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Navigation links */}
-        <nav className="p-3 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id as NavTab)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-[#0F2942] text-white shadow-xs'
-                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Footer Info */}
-      <div className="p-4 border-t border-slate-200 text-xs text-slate-500 bg-slate-50/30">
-        <div className="font-semibold text-slate-700">Offline Local DB Active</div>
-        <div className="text-[11px] text-slate-400 mt-0.5">GST 1 & 3B Ready • V1.0</div>
-      </div>
-    </aside>
+        {/* Footer Info */}
+        <div className="p-4 border-t border-slate-200 text-xs text-slate-500 bg-slate-50/30">
+          <div className="font-semibold text-slate-700">Offline Local DB Active</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">GST 1 & 3B Ready • V1.0</div>
+        </div>
+      </aside>
+    </>
   );
 };

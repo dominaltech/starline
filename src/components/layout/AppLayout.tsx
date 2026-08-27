@@ -14,6 +14,7 @@ import { SettingsManager } from '../settings/SettingsManager';
 
 export const AppLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('billing');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   const getTabTitle = () => {
     switch (activeTab) {
@@ -44,14 +45,22 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      {/* Sidebar */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Mobile Drawer & Desktop Sidebar */}
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        mobileOpen={mobileMenuOpen}
+        setMobileOpen={setMobileMenuOpen}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <TopBar activeTabTitle={getTabTitle()} />
+        <TopBar
+          activeTabTitle={getTabTitle()}
+          onOpenMobileMenu={() => setMobileMenuOpen(true)}
+        />
 
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-3 sm:p-6">
           {activeTab === 'billing' && <BillingScreen onBillCreated={() => {}} />}
           {activeTab === 'history' && <BillHistory />}
           {activeTab === 'customers' && <CustomerList />}
