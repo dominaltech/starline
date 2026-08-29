@@ -8,6 +8,7 @@ export interface Translations {
   nav_products: string;
   nav_racks: string;
   nav_credit_notes: string;
+  nav_udhar: string;
   nav_analytics: string;
   nav_reports: string;
   nav_gst: string;
@@ -16,6 +17,24 @@ export interface Translations {
   nav_management_section: string;
   nav_finance_section: string;
   nav_system_section: string;
+
+  // Udhar & Credit Management
+  udhar_title: string;
+  udhar_total_outstanding: string;
+  udhar_customers_count: string;
+  udhar_collected_recent: string;
+  udhar_pending_followups: string;
+  udhar_record_vasuli: string;
+  udhar_add_credit: string;
+  udhar_whatsapp_reminder: string;
+  udhar_follow_up_date: string;
+  udhar_follow_up_note: string;
+  udhar_filter_all: string;
+  udhar_filter_active: string;
+  udhar_filter_settled: string;
+  udhar_filter_overdue: string;
+  udhar_search_placeholder: string;
+  udhar_last_payment: string;
 
   // Header & TopBar
   topbar_terminal: string;
@@ -131,6 +150,7 @@ export const translations: Record<Language, Translations> = {
     nav_products: 'Products & Stock',
     nav_racks: 'Physical Racks',
     nav_credit_notes: 'Credit Notes',
+    nav_udhar: 'Udhar Khata (Dues)',
     nav_analytics: 'Analytics & Insights',
     nav_reports: 'CA Reports / P&L',
     nav_gst: 'GST Filing Hub',
@@ -139,6 +159,23 @@ export const translations: Record<Language, Translations> = {
     nav_management_section: 'Management',
     nav_finance_section: 'Finance',
     nav_system_section: 'System',
+
+    udhar_title: 'Udhar & Customer Credit Management',
+    udhar_total_outstanding: 'Total Outstanding Udhar',
+    udhar_customers_count: 'Customers with Dues',
+    udhar_collected_recent: 'Recent Collections / Vasuli',
+    udhar_pending_followups: 'Pending Follow-ups',
+    udhar_record_vasuli: 'Record Vasuli / Payment',
+    udhar_add_credit: '+ Add New Udhar Record',
+    udhar_whatsapp_reminder: 'Send WhatsApp Reminder',
+    udhar_follow_up_date: 'Next Follow-up Date',
+    udhar_follow_up_note: 'Follow-up Remarks / Promise Date',
+    udhar_filter_all: 'All Udhar Accounts',
+    udhar_filter_active: 'Active Dues (> ₹0)',
+    udhar_filter_settled: 'Settled (₹0)',
+    udhar_filter_overdue: 'Follow-up Due / Overdue',
+    udhar_search_placeholder: 'Search customer name, mobile or area...',
+    udhar_last_payment: 'Last Payment',
 
     topbar_terminal: 'Solapur Terminal',
     topbar_today: 'Today',
@@ -245,6 +282,7 @@ export const translations: Record<Language, Translations> = {
     nav_products: 'साहित्य व साठा',
     nav_racks: 'रॅक व कप्पे',
     nav_credit_notes: 'क्रेडिट नोट्स',
+    nav_udhar: 'उधार खाते (बाकी)',
     nav_analytics: 'विश्लेषण व आकडेवारी',
     nav_reports: 'सीए अहवाल / नफा-तोटा',
     nav_gst: 'जीएसटी केंद्र',
@@ -253,6 +291,23 @@ export const translations: Record<Language, Translations> = {
     nav_management_section: 'व्यवस्थापन',
     nav_finance_section: 'आर्थिक',
     nav_system_section: 'सिस्टम',
+
+    udhar_title: 'उधार खाते व ग्राहक बाकी व्यवस्थापन',
+    udhar_total_outstanding: 'एकूण बाकी रक्कम',
+    udhar_customers_count: 'बाकीदार ग्राहक संख्या',
+    udhar_collected_recent: 'अलीकडील जमा रक्कम (वसूली)',
+    udhar_pending_followups: 'प्रलंबित फॉलो-अप्स',
+    udhar_record_vasuli: 'जमा नोंदवा (वसूली)',
+    udhar_add_credit: '+ नवीन उधार नोंदवा',
+    udhar_whatsapp_reminder: 'व्हॉट्सॲप स्मरणपत्र पाठवा',
+    udhar_follow_up_date: 'पुढील फॉलो-अप तारीख',
+    udhar_follow_up_note: 'फॉलो-अप शेरा / तारीख',
+    udhar_filter_all: 'सर्व खाती',
+    udhar_filter_active: 'चालू बाकी (> ₹0)',
+    udhar_filter_settled: 'पूर्ण जमा (₹0)',
+    udhar_filter_overdue: 'फॉलो-अप देणे बाकी',
+    udhar_search_placeholder: 'ग्राहकाचे नाव, मोबाईल किंवा परिसर शोधा...',
+    udhar_last_payment: 'शेवटची जमा रक्कम',
 
     topbar_terminal: 'सोलापूर टर्मिनल',
     topbar_today: 'आजची विक्री',
@@ -359,6 +414,7 @@ export const translations: Record<Language, Translations> = {
     nav_products: 'उत्पाद एवं स्टॉक',
     nav_racks: 'रैक एवं सेक्शन',
     nav_credit_notes: 'क्रेडिट नोट्स',
+    nav_udhar: 'उधार खाता (बकाया)',
     nav_analytics: 'विश्लेषण एवं आंकड़े',
     nav_reports: 'सीए रिपोर्ट्स / लाभ-हानि',
     nav_gst: 'जीएसटी फाइलिंग हब',
@@ -367,6 +423,23 @@ export const translations: Record<Language, Translations> = {
     nav_management_section: 'प्रबंधन',
     nav_finance_section: 'वित्त',
     nav_system_section: 'सिस्टम',
+
+    udhar_title: 'उधार खाता एवं ग्राहक बकाया प्रबंधन',
+    udhar_total_outstanding: 'कुल बकाया राशि',
+    udhar_customers_count: 'बकायादार ग्राहक संख्या',
+    udhar_collected_recent: 'हाल की जमा राशि (वसूली)',
+    udhar_pending_followups: 'लंबित फॉलो-अप',
+    udhar_record_vasuli: 'जमा राशि दर्ज करें (वसूली)',
+    udhar_add_credit: '+ नया उधार जोड़ें',
+    udhar_whatsapp_reminder: 'व्हाट्सएप रिमाइंडर भेजें',
+    udhar_follow_up_date: 'अगली फॉलो-अप तिथि',
+    udhar_follow_up_note: 'फॉलो-अप टिप्पणी / वादा तिथि',
+    udhar_filter_all: 'सभी खाते',
+    udhar_filter_active: 'सक्रिय बकाया (> ₹0)',
+    udhar_filter_settled: 'पूर्ण भुगतान (₹0)',
+    udhar_filter_overdue: 'फॉलो-अप देय',
+    udhar_search_placeholder: 'ग्राहक का नाम, मोबाइल या क्षेत्र खोजें...',
+    udhar_last_payment: 'अंतिम जमा राशि',
 
     topbar_terminal: 'सोलापुर टर्मिनल',
     topbar_today: 'आज की बिक्री',

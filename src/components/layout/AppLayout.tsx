@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { BillingScreen } from '../billing/BillingScreen';
 import { BillHistory } from '../billing/BillHistory';
 import { CustomerList } from '../customers/CustomerList';
+import { UdharKhataManager } from '../udhar/UdharKhataManager';
 import { ProductList } from '../inventory/ProductList';
 import { RackSectionView } from '../inventory/RackSectionView';
 import { CreditNoteManager } from '../credit-notes/CreditNoteManager';
@@ -26,6 +27,8 @@ export const AppLayout: React.FC = () => {
         return t('nav_bill_history');
       case 'customers':
         return t('nav_customers');
+      case 'udhar':
+        return t('nav_udhar');
       case 'inventory':
         return t('nav_products');
       case 'racks':
@@ -66,6 +69,7 @@ export const AppLayout: React.FC = () => {
           {activeTab === 'billing' && <BillingScreen onBillCreated={() => {}} />}
           {activeTab === 'history' && <BillHistory />}
           {activeTab === 'customers' && <CustomerList />}
+          {activeTab === 'udhar' && <UdharKhataManager />}
           {activeTab === 'inventory' && <ProductList />}
           {activeTab === 'racks' && <RackSectionView />}
           {activeTab === 'credit-notes' && <CreditNoteManager />}

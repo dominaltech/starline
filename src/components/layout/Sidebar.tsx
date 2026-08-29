@@ -13,10 +13,11 @@ import {
   Receipt,
   LayoutGrid,
   TrendingUp,
+  Wallet,
   X
 } from 'lucide-react';
 
-export type NavTab = 'billing' | 'history' | 'customers' | 'inventory' | 'racks' | 'credit-notes' | 'analytics' | 'reports' | 'gst' | 'settings';
+export type NavTab = 'billing' | 'history' | 'customers' | 'udhar' | 'inventory' | 'racks' | 'credit-notes' | 'analytics' | 'reports' | 'gst' | 'settings';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -37,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'billing', labelKey: 'nav_new_invoice', icon: Receipt },
     { id: 'history', labelKey: 'nav_bill_history', icon: FileText },
     { id: 'customers', labelKey: 'nav_customers', icon: Users },
+    { id: 'udhar', labelKey: 'nav_udhar', icon: Wallet },
     { id: 'inventory', labelKey: 'nav_products', icon: Package },
     { id: 'racks', labelKey: 'nav_racks', icon: LayoutGrid },
     { id: 'credit-notes', labelKey: 'nav_credit_notes', icon: RotateCcw },

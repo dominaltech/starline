@@ -16,6 +16,10 @@ export interface Customer {
   gstin?: string;
   state_code?: string;
   dues_balance: number;
+  follow_up_date?: string;
+  follow_up_notes?: string;
+  last_payment_date?: string;
+  last_payment_amount?: number;
   created_at: string;
   updated_at: string;
 }
