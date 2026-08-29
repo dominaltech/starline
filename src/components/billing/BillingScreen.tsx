@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDb } from '../../context/DbContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { Bill, BillItem, BillType, Customer, Product } from '../../types';
 import { numberToIndianWords } from '../../utils/numberToWords';
 import { formatDateInput } from '../../utils/formatters';
@@ -22,6 +23,7 @@ interface BillingScreenProps {
 
 export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) => {
   const { settings, products, workers, createBill, customers } = useDb();
+  const { t } = useLanguage();
 
   // Mode: Estimate (Non-GST) vs GST
   const [billType, setBillType] = useState<BillType>('ESTIMATE');
@@ -346,7 +348,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Estimate (Non-GST)
+            {t('bill_mode_estimate')}
           </button>
           <button
             onClick={() => setBillType('GST')}
@@ -356,14 +358,14 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            GST Tax Invoice (18%)
+            {t('bill_mode_gst')}
           </button>
         </div>
 
         {saveSuccessMsg && (
           <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded border border-emerald-200 font-semibold animate-pulse">
             <CheckCircle className="w-4 h-4" />
-            <span>{saveSuccessMsg}</span>
+            <span>{t('bill_saved_success')}</span>
           </div>
         )}
 
@@ -375,21 +377,21 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             title="Clear current form"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Clear</span>
+            <span>{t('action_clear')}</span>
           </button>
           <button
             onClick={() => handleSaveBill(false)}
             className="btn-secondary text-xs px-3 py-2 text-slate-800 flex-1 sm:flex-none justify-center"
           >
             <Save className="w-3.5 h-3.5 text-blue-900" />
-            <span>Save</span>
+            <span>{t('action_save')}</span>
           </button>
           <button
             onClick={() => handleSaveBill(true)}
             className="btn-primary text-xs px-4 py-2 flex-1 sm:flex-none justify-center"
           >
             <Printer className="w-4 h-4 text-white" />
-            <span>Save & Print</span>
+            <span>{t('action_save_print')}</span>
           </button>
         </div>
       </div>
@@ -422,12 +424,12 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
 
           <div className="mt-4 pt-3 border-t border-slate-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <h2 className="text-sm font-black tracking-wider uppercase underline text-slate-900">
-              {isGST ? 'TAX INVOICE / CUM RECEIPT' : 'INVOICE / CUM RECEIPT'}
+              {isGST ? t('bill_title_gst') : t('bill_title_estimate')}
             </h2>
 
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="font-semibold text-slate-700">Date:</span>
+                <span className="font-semibold text-slate-700">{t('bill_date')}:</span>
                 <input
                   type="date"
                   value={invoiceDate}
@@ -437,7 +439,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
               </div>
 
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="font-semibold text-slate-700">Invoice No:</span>
+                <span className="font-semibold text-slate-700">{t('bill_invoice_no')}:</span>
                 <input
                   type="text"
                   value={invoiceNum}
@@ -450,17 +452,17 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
         </div>
 
         {/* Customer & Appliance Details Form */}
-        <div className="p-6 border-b border-slate-200 bg-white space-y-4">
+        <div className="p-4 sm:p-6 border-b border-slate-200 bg-white space-y-4">
           {/* Customer Search & Name Block */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 relative">
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Received with thanks from (Customer Name & Search)
+                {t('bill_cust_name_label')}
               </label>
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Type name or mobile to auto-suggest / auto-create..."
+                  placeholder={t('bill_cust_search_placeholder')}
                   value={customerName}
                   onChange={(e) => {
                     setCustomerName(e.target.value);
@@ -508,7 +510,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Phone / Mob :</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_mobile_no')} :</label>
               <input
                 type="text"
                 placeholder="10-digit mobile number"
@@ -524,7 +526,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Customer Address :</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_address')} :</label>
               <input
                 type="text"
                 placeholder="Street address, colony, landmark"
@@ -537,7 +539,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             {isGST && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Customer GSTIN (For B2B Billing) :
+                  {t('bill_gstin')} :
                 </label>
                 <input
                   type="text"
@@ -559,7 +561,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
           {/* Appliance & AMC Details Block */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Products Name :</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_appliance')} :</label>
               <input
                 type="text"
                 placeholder="e.g. Refrigerator / AC / Washing Machine"
@@ -570,7 +572,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Brand Model No :</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_brand_model')} :</label>
               <input
                 type="text"
                 placeholder="e.g. LG 190L / Voltas 1.5T"
@@ -581,7 +583,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">AMC Start Date :</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_amc_from')} :</label>
               <input
                 type="date"
                 value={amcStartDate}
@@ -591,7 +593,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">AMC End Date :</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_amc_to')} :</label>
               <input
                 type="date"
                 value={amcEndDate}
@@ -603,13 +605,13 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
         </div>
 
         {/* SPARES REPLACED Table */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-              SPARES REPLACED
+              {t('bill_spares_section')}
             </h3>
-            <span className="text-[11px] text-slate-500 italic">
-              Items typed on-the-fly will automatically create new catalog items upon saving.
+            <span className="text-[11px] text-slate-500 italic hidden sm:inline">
+              {t('bill_spares_hint')}
             </span>
           </div>
 
@@ -617,16 +619,16 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             <table className="w-full text-xs text-left">
               <thead className="table-header">
                 <tr>
-                  <th className="py-2.5 px-2 w-10 text-center">Sr.</th>
-                  <th className="py-2.5 px-3">ITEM DESCRIPTION (Typeahead & Quick-Add)</th>
+                  <th className="py-2.5 px-2 w-10 text-center">{t('bill_col_sr')}</th>
+                  <th className="py-2.5 px-3">{t('bill_col_item')}</th>
                   {isGST && (
                     <>
-                      <th className="py-2.5 px-2 w-24 text-right">RATE (₹)</th>
-                      <th className="py-2.5 px-2 w-20 text-right">DISC %</th>
+                      <th className="py-2.5 px-2 w-24 text-right">{t('bill_col_rate')}</th>
+                      <th className="py-2.5 px-2 w-20 text-right">{t('bill_col_disc')}</th>
                     </>
                   )}
-                  <th className="py-2.5 px-2 w-16 text-center">QTY.</th>
-                  <th className="py-2.5 px-3 w-28 text-right">AMOUNT (₹)</th>
+                  <th className="py-2.5 px-2 w-16 text-center">{t('bill_col_qty')}</th>
+                  <th className="py-2.5 px-3 w-28 text-right">{t('bill_col_amount')}</th>
                   <th className="py-2.5 px-2 w-10 text-center"></th>
                 </tr>
               </thead>
@@ -759,7 +761,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
               className="btn-secondary text-xs px-3 py-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Line Item</span>
+              <span>{t('action_add_item')}</span>
             </button>
 
             {/* Totals Breakdown */}
@@ -767,22 +769,22 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
               {isGST ? (
                 <>
                   <div className="flex justify-between text-slate-600">
-                    <span>Taxable Subtotal:</span>
+                    <span>{t('bill_taxable_subtotal')}:</span>
                     <span className="font-semibold">₹{totalTaxable.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-slate-600">
-                    <span>CGST (9%):</span>
+                    <span>{t('bill_cgst')}:</span>
                     <span className="font-semibold">₹{totalCgst.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-slate-600">
-                    <span>SGST (9%):</span>
+                    <span>{t('bill_sgst')}:</span>
                     <span className="font-semibold">₹{totalSgst.toFixed(2)}</span>
                   </div>
                 </>
               ) : null}
 
               <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-300">
-                <span>TOTAL:</span>
+                <span>{t('bill_grand_total')}:</span>
                 <span>₹{grandTotal.toFixed(2)}</span>
               </div>
             </div>
@@ -790,9 +792,9 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
         </div>
 
         {/* Footer Configuration Block */}
-        <div className="p-6 bg-slate-50/70 border-t border-slate-200 space-y-4">
+        <div className="p-4 sm:p-6 bg-slate-50/70 border-t border-slate-200 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Rupees in Word :</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_rupees_in_words')}</label>
             <div className="p-2 bg-white rounded border border-slate-300 text-xs font-semibold italic text-slate-800">
               {wordsAmount}
             </div>
@@ -801,14 +803,14 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Assigned Technician / Worker :
+                {t('bill_assigned_worker')}
               </label>
               <select
                 value={assignedWorkerId}
                 onChange={(e) => setAssignedWorkerId(e.target.value)}
                 className="input-field text-xs font-medium cursor-pointer"
               >
-                <option value="">-- None (Counter Pickup) --</option>
+                <option value="">{t('bill_worker_none')}</option>
                 {workers.filter(w => w.is_active).map(w => (
                   <option key={w.id} value={w.id}>
                     {w.name} ({w.specialization || w.phone})
@@ -819,7 +821,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Amount Received (₹) :
+                {t('bill_amount_received')}
               </label>
               <input
                 type="number"
@@ -832,7 +834,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Terms & Conditions :
+                {t('bill_terms_conditions')}
               </label>
               <textarea
                 rows={2}

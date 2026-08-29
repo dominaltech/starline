@@ -1,6 +1,8 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useDb } from '../../context/DbContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { LanguageToggle } from './LanguageToggle';
 import { ShieldCheck, UserCheck, AlertTriangle, IndianRupee, Layers, Menu } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -12,6 +14,7 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({ activeTabTitle, onOpenMobileMenu }) => {
   const { user, role, switchRole, isSuperAdmin } = useAuth();
   const { bills, products, customers } = useDb();
+  const { t } = useLanguage();
 
   // Quick stats
   const todayStr = new Date().toISOString().split('T')[0];
@@ -22,47 +25,50 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTabTitle, onOpenMobileMenu
   const totalDues = customers.reduce((acc, c) => acc + c.dues_balance, 0);
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-      <div className="flex items-center gap-2.5 min-w-0">
+    <header className="h-16 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
         {/* Hamburger button on Mobile */}
         <button
           onClick={onOpenMobileMenu}
-          className="p-2 -ml-1 rounded-lg text-slate-700 hover:bg-slate-100 lg:hidden shrink-0"
+          className="p-1.5 sm:p-2 -ml-1 rounded-lg text-slate-700 hover:bg-slate-100 lg:hidden shrink-0"
           aria-label="Open Navigation Menu"
         >
           <Menu className="w-5 h-5 text-[#0F2942]" />
         </button>
 
-        <h1 className="text-base sm:text-xl font-bold text-slate-800 tracking-tight truncate">
+        <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-slate-800 tracking-tight truncate">
           {activeTabTitle}
         </h1>
-        <span className="hidden sm:inline-block text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono shrink-0">
-          Solapur
+        <span className="hidden md:inline-block text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono shrink-0">
+          {t('topbar_terminal')}
         </span>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Quick summary metric pills */}
-        <div className="hidden lg:flex items-center gap-3 border-r border-slate-200 pr-4">
+        <div className="hidden xl:flex items-center gap-3 border-r border-slate-200 pr-3">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-50 border border-slate-200 text-xs">
             <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="text-slate-500 font-medium">Today:</span>
+            <span className="text-slate-500 font-medium">{t('topbar_today')}:</span>
             <span className="font-semibold text-slate-800">{formatCurrency(todayTotal)}</span>
           </div>
 
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-50 border border-slate-200 text-xs">
             <Layers className="w-3.5 h-3.5 text-amber-600" />
-            <span className="text-slate-500 font-medium">Dues:</span>
+            <span className="text-slate-500 font-medium">{t('topbar_dues')}:</span>
             <span className="font-semibold text-slate-800">{formatCurrency(totalDues)}</span>
           </div>
 
           {lowStockCount > 0 && (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-              <span>{lowStockCount} low stock</span>
+              <span>{lowStockCount} {t('topbar_low_stock')}</span>
             </div>
           )}
         </div>
+
+        {/* English / Marathi / Hindi i18n Toggle */}
+        <LanguageToggle />
 
         {/* User Role Switcher Dropdown */}
         <div className="flex items-center gap-1 sm:gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1">
@@ -72,7 +78,7 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTabTitle, onOpenMobileMenu
             ) : (
               <UserCheck className="w-4 h-4 text-emerald-700" />
             )}
-            <span className="text-xs font-semibold text-slate-700 truncate max-w-[100px]">{user.name}</span>
+            <span className="text-xs font-semibold text-slate-700 truncate max-w-[90px]">{user.name}</span>
           </div>
 
           <select

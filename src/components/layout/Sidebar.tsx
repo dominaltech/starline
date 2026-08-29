@@ -1,4 +1,6 @@
 import React from 'react';
+import { useLanguage } from '../../context/LanguageContext';
+import { Translations } from '../../i18n/translations';
 import {
   FileText,
   Users,
@@ -29,17 +31,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen,
   setMobileOpen
 }) => {
-  const navItems = [
-    { id: 'billing', label: 'New Invoice', icon: Receipt, section: 'Billing' },
-    { id: 'history', label: 'Bill History', icon: FileText, section: 'Billing' },
-    { id: 'customers', label: 'Customers & CRM', icon: Users, section: 'Management' },
-    { id: 'inventory', label: 'Products & Stock', icon: Package, section: 'Management' },
-    { id: 'racks', label: 'Physical Racks', icon: LayoutGrid, section: 'Management' },
-    { id: 'credit-notes', label: 'Credit Notes', icon: RotateCcw, section: 'Management' },
-    { id: 'analytics', label: 'Analytics & Insights', icon: TrendingUp, section: 'Finance' },
-    { id: 'reports', label: 'CA Reports / P&L', icon: BarChart3, section: 'Finance' },
-    { id: 'gst', label: 'GST Filing Hub', icon: Building2, section: 'Finance' },
-    { id: 'settings', label: 'Settings & Backups', icon: Settings, section: 'System' },
+  const { t } = useLanguage();
+
+  const navItems: { id: NavTab; labelKey: keyof Translations; icon: React.FC<{ className?: string }> }[] = [
+    { id: 'billing', labelKey: 'nav_new_invoice', icon: Receipt },
+    { id: 'history', labelKey: 'nav_bill_history', icon: FileText },
+    { id: 'customers', labelKey: 'nav_customers', icon: Users },
+    { id: 'inventory', labelKey: 'nav_products', icon: Package },
+    { id: 'racks', labelKey: 'nav_racks', icon: LayoutGrid },
+    { id: 'credit-notes', labelKey: 'nav_credit_notes', icon: RotateCcw },
+    { id: 'analytics', labelKey: 'nav_analytics', icon: TrendingUp },
+    { id: 'reports', labelKey: 'nav_reports', icon: BarChart3 },
+    { id: 'gst', labelKey: 'nav_gst', icon: Building2 },
+    { id: 'settings', labelKey: 'nav_settings', icon: Settings },
   ];
 
   const handleSelectTab = (tabId: NavTab) => {
@@ -99,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <button
                   key={item.id}
-                  onClick={() => handleSelectTab(item.id as NavTab)}
+                  onClick={() => handleSelectTab(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
                     isActive
                       ? 'bg-[#0F2942] text-white shadow-xs'
@@ -107,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </button>
               );
             })}
