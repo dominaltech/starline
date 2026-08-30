@@ -24,7 +24,7 @@ import {
 
 export const AnalyticsDashboard: React.FC = () => {
   const { bills, products, customers, workers } = useDb();
-  const { isSuperAdmin, role } = useAuth();
+  const { isSuperAdmin } = useAuth();
 
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [timeRange, setTimeRange] = useState<'30D' | '6M' | '1Y' | 'ALL'>('ALL');
