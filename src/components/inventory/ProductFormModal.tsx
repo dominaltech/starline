@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useDb } from '../../context/DbContext';
-import { X, Package, ShieldAlert } from 'lucide-react';
+import { X, Package, ShieldAlert, Upload, Image, Trash2 } from 'lucide-react';
 
 interface ProductFormModalProps {
   product?: Product | null;
@@ -30,6 +30,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ product, onC
   const [minStockAlert, setMinStockAlert] = useState<string>(
     product?.min_stock_alert !== undefined ? String(product.min_stock_alert) : '5'
   );
+  const [imageData, setImageData] = useState<string>(product?.image_data || '');
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 800000) {
+      alert('Image must be under 800KB for offline storage.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setImageData(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +65,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ product, onC
       stock_qty: stockQty ? parseInt(stockQty, 10) : 0,
       section_id: sectionId || undefined,
       min_stock_alert: minStockAlert ? parseInt(minStockAlert, 10) : 5,
+      image_data: imageData || undefined,
       created_at: product?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -114,13 +130,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ product, onC
               <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="input-field cursor-pointer"
+                className="input-field cursor-pointer font-medium"
               >
                 <option value="NOS">NOS (Numbers)</option>
                 <option value="PCS">PCS (Pieces)</option>
                 <option value="SET">SET (Set of Parts)</option>
                 <option value="QTL">QTL (Quintal)</option>
                 <option value="MTR">MTR (Meters)</option>
+                <option value="SERVICE">SERVICE (Service / Labor Catalog)</option>
               </select>
             </div>
 
@@ -138,6 +155,47 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ product, onC
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Product Image Upload */}
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+            <label className="block font-semibold text-slate-700">Product / Part Image</label>
+            <div className="flex items-center gap-3">
+              {imageData ? (
+                <div className="relative group">
+                  <img
+                    src={imageData}
+                    alt="Product preview"
+                    className="w-16 h-16 object-cover rounded-md border border-slate-300 shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setImageData('')}
+                    className="absolute -top-1.5 -right-1.5 p-1 bg-rose-600 text-white rounded-full hover:bg-rose-700 shadow-xs"
+                    title="Remove Image"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 bg-white rounded-md border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400">
+                  <Image className="w-5 h-5 mb-0.5" />
+                  <span className="text-[9px]">No photo</span>
+                </div>
+              )}
+
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-900 file:text-white hover:file:bg-blue-800 cursor-pointer"
+                />
+                <span className="text-[10.5px] text-slate-400 mt-1 block">
+                  PNG/JPG up to 800KB. Stored offline with product.
+                </span>
+              </div>
             </div>
           </div>
 

@@ -8,7 +8,10 @@ import {
   Bill,
   CreditNote,
   StockMovement,
-  JobStatus
+  JobStatus,
+  ServiceRecord,
+  AppNote,
+  B2BBill
 } from '../types';
 import { storage } from '../db/storage';
 import { useAuth } from './AuthContext';
@@ -22,6 +25,9 @@ interface DbContextType {
   bills: Bill[];
   creditNotes: CreditNote[];
   stockMovements: StockMovement[];
+  serviceRecords: ServiceRecord[];
+  appNotes: AppNote[];
+  b2bBills: B2BBill[];
   refreshData: () => void;
   saveSettings: (s: ShopSettings) => void;
   createBill: (b: Omit<Bill, 'id' | 'created_at'>) => Bill;
@@ -35,6 +41,12 @@ interface DbContextType {
   deleteSection: (id: string) => void;
   saveWorker: (w: Worker) => void;
   createCreditNote: (cn: Omit<CreditNote, 'id' | 'created_at'>) => CreditNote;
+  saveServiceRecord: (r: ServiceRecord) => ServiceRecord;
+  deleteServiceRecord: (id: string) => void;
+  saveAppNote: (n: AppNote) => AppNote;
+  deleteAppNote: (id: string) => void;
+  saveB2BBill: (b: B2BBill) => B2BBill;
+  deleteB2BBill: (id: string) => void;
 }
 
 const DbContext = createContext<DbContextType | undefined>(undefined);
@@ -49,6 +61,9 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [bills, setBills] = useState<Bill[]>(() => storage.getBills());
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>(() => storage.getCreditNotes());
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => storage.getStockMovements());
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>(() => storage.getServiceRecords());
+  const [appNotes, setAppNotes] = useState<AppNote[]>(() => storage.getAppNotes());
+  const [b2bBills, setB2BBills] = useState<B2BBill[]>(() => storage.getB2BBills());
 
   const refreshData = useCallback(() => {
     setSettings(storage.getSettings());
@@ -59,6 +74,9 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setBills(storage.getBills());
     setCreditNotes(storage.getCreditNotes());
     setStockMovements(storage.getStockMovements());
+    setServiceRecords(storage.getServiceRecords());
+    setAppNotes(storage.getAppNotes());
+    setB2BBills(storage.getB2BBills());
   }, [role]);
 
   useEffect(() => {
@@ -129,6 +147,39 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     return res;
   };
 
+  const handleSaveServiceRecord = (r: ServiceRecord) => {
+    const res = storage.saveServiceRecord(r);
+    refreshData();
+    return res;
+  };
+
+  const handleDeleteServiceRecord = (id: string) => {
+    storage.deleteServiceRecord(id);
+    refreshData();
+  };
+
+  const handleSaveAppNote = (n: AppNote) => {
+    const res = storage.saveAppNote(n);
+    refreshData();
+    return res;
+  };
+
+  const handleDeleteAppNote = (id: string) => {
+    storage.deleteAppNote(id);
+    refreshData();
+  };
+
+  const handleSaveB2BBill = (b: B2BBill) => {
+    const res = storage.saveB2BBill(b);
+    refreshData();
+    return res;
+  };
+
+  const handleDeleteB2BBill = (id: string) => {
+    storage.deleteB2BBill(id);
+    refreshData();
+  };
+
   const value: DbContextType = {
     settings,
     customers,
@@ -138,6 +189,9 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     bills,
     creditNotes,
     stockMovements,
+    serviceRecords,
+    appNotes,
+    b2bBills,
     refreshData,
     saveSettings: handleSaveSettings,
     createBill: handleCreateBill,
@@ -150,7 +204,13 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     saveSection: handleSaveSection,
     deleteSection: handleDeleteSection,
     saveWorker: handleSaveWorker,
-    createCreditNote: handleCreateCreditNote
+    createCreditNote: handleCreateCreditNote,
+    saveServiceRecord: handleSaveServiceRecord,
+    deleteServiceRecord: handleDeleteServiceRecord,
+    saveAppNote: handleSaveAppNote,
+    deleteAppNote: handleDeleteAppNote,
+    saveB2BBill: handleSaveB2BBill,
+    deleteB2BBill: handleDeleteB2BBill
   };
 
   return <DbContext.Provider value={value}>{children}</DbContext.Provider>;

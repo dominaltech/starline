@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDb } from '../../context/DbContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Bill, BillItem, BillType, Customer, Product } from '../../types';
 import { numberToIndianWords } from '../../utils/numberToWords';
-import { formatDateInput } from '../../utils/formatters';
+import { formatDateInput, formatDate } from '../../utils/formatters';
 import { BillPrintTemplate } from './BillPrintTemplate';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import {
   Plus,
   Trash2,
@@ -14,7 +16,11 @@ import {
   Search,
   CheckCircle,
   FileCheck,
-  X
+  X,
+  Download,
+  Image as ImageIcon,
+  MessageCircle,
+  Globe
 } from 'lucide-react';
 
 interface BillingScreenProps {
@@ -88,6 +94,8 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
+  const [waLanguage, setWaLanguage] = useState<'mr' | 'hi' | 'en'>('mr');
+  const printRef = useRef<HTMLDivElement>(null);
 
   // Update invoice num when settings change
   useEffect(() => {
@@ -301,6 +309,116 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     } else {
       resetForm();
     }
+  };
+
+  // Download PNG Image
+  const handleDownloadImage = async () => {
+    if (!printRef.current || !previewBill) return;
+    try {
+      const canvas = await html2canvas(printRef.current, { scale: 2 });
+      const link = document.createElement('a');
+      link.download = `StarLine_Bill_${previewBill.invoice_num}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) {
+      console.error('Image export failed:', e);
+      alert('Failed to generate image');
+    }
+  };
+
+  // Download PDF
+  const handleDownloadPDF = async () => {
+    if (!printRef.current || !previewBill) return;
+    try {
+      const canvas = await html2canvas(printRef.current, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a5');
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+      pdf.save(`StarLine_Bill_${previewBill.invoice_num}.pdf`);
+    } catch (e) {
+      console.error('PDF export failed:', e);
+      alert('Failed to generate PDF');
+    }
+  };
+
+  // Build WhatsApp Message
+  const buildBillWhatsAppMessage = (bill: Bill, lang: 'mr' | 'hi' | 'en'): string => {
+    const itemsList = bill.items
+      .map(
+        (it, idx) =>
+          `${idx + 1}. ${it.item_description} × ${it.qty} = ₹${it.amount.toFixed(2)}`
+      )
+      .join('\n');
+
+    if (lang === 'mr') {
+      return (
+        `*${settings.shop_name}*\n` +
+        `दुकान क्र. ३, अन्वर इस्टेट, दक्षिण सदर बाजार, सोलापूर\n` +
+        `मोबाईल: ${settings.mobiles}\n\n` +
+        `*बिल / पावती तपशील*\n` +
+        `बिल क्र.: *#${bill.invoice_num}*\n` +
+        `दिनांक: ${formatDate(bill.invoice_date)}\n` +
+        `ग्राहक: ${bill.customer_name}\n` +
+        (bill.product_name_desc ? `उपकरण: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
+        `------------------------\n` +
+        `*सुटे भाग तपशील:*\n` +
+        `${itemsList}\n` +
+        `------------------------\n` +
+        `*एकूण रक्कम (Grand Total): ₹${bill.grand_total.toFixed(2)}*\n` +
+        `जमा रक्कम (Paid): ₹${bill.paid_amount.toFixed(2)}\n` +
+        (bill.due_amount > 0 ? `*बाकी रक्कम (Dues): ₹${bill.due_amount.toFixed(2)}*\n` : `बाकी: ₹0.00 (पूर्ण भरणा)\n`) +
+        `\nस्टार लाईन सर्व्हिसेस निवडल्याबद्दल धन्यवाद!`
+      );
+    } else if (lang === 'hi') {
+      return (
+        `*${settings.shop_name}*\n` +
+        `दुकान क्र. ३, अनवर एस्टेट, दक्षिण सदर बाजार, सोलापुर\n` +
+        `संपर्क: ${settings.mobiles}\n\n` +
+        `*बिल / रसीद विवरण*\n` +
+        `बिल क्र.: *#${bill.invoice_num}*\n` +
+        `दिनांक: ${formatDate(bill.invoice_date)}\n` +
+        `ग्राहक: ${bill.customer_name}\n` +
+        (bill.product_name_desc ? `उपकरण: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
+        `------------------------\n` +
+        `*स्पेयर पार्ट्स विवरण:*\n` +
+        `${itemsList}\n` +
+        `------------------------\n` +
+        `*कुल राशि: ₹${bill.grand_total.toFixed(2)}*\n` +
+        `प्राप्त राशि: ₹${bill.paid_amount.toFixed(2)}\n` +
+        (bill.due_amount > 0 ? `*बकाया राशि: ₹${bill.due_amount.toFixed(2)}*\n` : `बकाया: ₹0.00 (पूर्ण भुगतान)\n`) +
+        `\nस्टार लाइन सर्विसेज में सेवा का अवसर देने हेतु धन्यवाद!`
+      );
+    } else {
+      return (
+        `*${settings.shop_name}*\n` +
+        `Shop No. 3, Anvar Estate, South Sadar Bazar, Solapur\n` +
+        `Contact: ${settings.mobiles}\n\n` +
+        `*INVOICE / RECEIPT SUMMARY*\n` +
+        `Invoice #: *#${bill.invoice_num}*\n` +
+        `Date: ${formatDate(bill.invoice_date)}\n` +
+        `Customer: ${bill.customer_name}\n` +
+        (bill.product_name_desc ? `Appliance: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
+        `------------------------\n` +
+        `*Items Replaced:*\n` +
+        `${itemsList}\n` +
+        `------------------------\n` +
+        `*Grand Total: ₹${bill.grand_total.toFixed(2)}*\n` +
+        `Amount Paid: ₹${bill.paid_amount.toFixed(2)}\n` +
+        (bill.due_amount > 0 ? `*Outstanding Dues: ₹${bill.due_amount.toFixed(2)}*\n` : `Dues: ₹0.00 (Fully Settled)\n`) +
+        `\nThank you for choosing Star Line Services!`
+      );
+    }
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!previewBill) return;
+    const cleanMobile = previewBill.customer_mobile.replace(/\D/g, '');
+    const mobileWithCode = cleanMobile.length === 10 ? `91${cleanMobile}` : cleanMobile;
+    const msg = encodeURIComponent(buildBillWhatsAppMessage(previewBill, waLanguage));
+    const url = `https://wa.me/${mobileWithCode}?text=${msg}`;
+    window.open(url, '_blank');
   };
 
   const resetForm = () => {
@@ -844,17 +962,54 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
               />
             </div>
           </div>
+
+          {/* Bottom Direct Save & Print Trigger Bar */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-200">
+            <span className="text-xs text-slate-500 italic">
+              All records saved securely to local browser storage.
+            </span>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={resetForm}
+                className="btn-secondary text-xs px-3 py-2 flex-1 sm:flex-none justify-center"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{t('action_clear')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSaveBill(false)}
+                className="btn-secondary text-xs px-4 py-2 text-slate-800 flex-1 sm:flex-none justify-center"
+              >
+                <Save className="w-3.5 h-3.5 text-blue-900" />
+                <span>{t('action_save')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSaveBill(true)}
+                className="btn-primary text-xs px-5 py-2 flex-1 sm:flex-none justify-center bg-[#0F2942] hover:bg-[#1e3a5f]"
+              >
+                <Printer className="w-4 h-4 text-white" />
+                <span>{t('action_save_print')}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* A5 Print & PDF Preview Modal */}
+      {/* Enhanced A5 Print, PNG, PDF & WhatsApp Preview Modal */}
       {showPrintModal && previewBill && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+            {/* Header */}
             <div className="flex justify-between items-center border-b border-slate-200 pb-3">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <FileCheck className="w-5 h-5 text-blue-900" />
-                <span>Print Preview — Invoice #{previewBill.invoice_num}</span>
+                <span>Invoice #{previewBill.invoice_num} — Print & Share</span>
               </h3>
               <button
                 onClick={() => {
@@ -867,12 +1022,97 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
               </button>
             </div>
 
-            {/* Render Printable Template */}
-            <div className="border border-slate-200 rounded p-2 max-h-[70vh] overflow-y-auto bg-slate-100/50">
+            {/* WhatsApp Language Selector */}
+            <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs">
+              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                <Globe className="w-4 h-4 text-blue-900" />
+                <span>WhatsApp Message Language:</span>
+              </span>
+              <div className="flex bg-white rounded border border-slate-200 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setWaLanguage('mr')}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                    waLanguage === 'mr'
+                      ? 'bg-[#0F2942] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  मराठी
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWaLanguage('hi')}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                    waLanguage === 'hi'
+                      ? 'bg-[#0F2942] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  हिंदी
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWaLanguage('en')}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                    waLanguage === 'en'
+                      ? 'bg-[#0F2942] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Action Buttons Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="p-2.5 bg-[#0F2942] hover:bg-[#1e3a5f] text-white rounded-lg font-bold text-xs flex flex-col items-center justify-center gap-1 shadow-xs transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print (A5 Paper)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadImage}
+                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-bold text-xs flex flex-col items-center justify-center gap-1 border border-slate-300 shadow-2xs transition-all"
+              >
+                <ImageIcon className="w-4 h-4 text-blue-900" />
+                <span>Download Image</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadPDF}
+                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-bold text-xs flex flex-col items-center justify-center gap-1 border border-slate-300 shadow-2xs transition-all"
+              >
+                <Download className="w-4 h-4 text-emerald-800" />
+                <span>Download PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendWhatsApp}
+                className="p-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex flex-col items-center justify-center gap-1 shadow-xs transition-all"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>WhatsApp Bill</span>
+              </button>
+            </div>
+
+            {/* Bill Print Container */}
+            <div
+              ref={printRef}
+              className="border border-slate-200 rounded-lg p-3 max-h-[55vh] overflow-y-auto bg-slate-100/60"
+            >
               <BillPrintTemplate bill={previewBill} settings={settings} />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end pt-2 border-t border-slate-200">
               <button
                 onClick={() => {
                   setShowPrintModal(false);
@@ -881,13 +1121,6 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                 className="btn-secondary text-xs"
               >
                 Done
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="btn-primary text-xs"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Send to Printer (A5)</span>
               </button>
             </div>
           </div>

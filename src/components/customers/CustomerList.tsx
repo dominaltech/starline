@@ -8,7 +8,9 @@ import {
   Search,
   UserPlus,
   Eye,
-  X
+  X,
+  Mic,
+  Check
 } from 'lucide-react';
 
 export const CustomerList: React.FC = () => {
@@ -17,12 +19,102 @@ export const CustomerList: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [isListening, setIsListening] = useState<boolean>(false);
 
   // New Customer Form State
   const [name, setName] = useState<string>('');
   const [mobile, setMobile] = useState<string>('');
   const [address, setAddress] = useState<string>('');
   const [gstin, setGstin] = useState<string>('');
+
+  // Inline Table Editing State
+  const [inlineEdits, setInlineEdits] = useState<Record<string, Partial<Customer>>>({});
+  const [activeCellId, setActiveCellId] = useState<string | null>(null);
+
+  // Voice Search Handler
+  const startVoiceSearch = () => {
+    const SpeechRecognition =
+      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).SpeechRecognition ||
+      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Voice search is supported in Google Chrome & Microsoft Edge.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      setIsListening(true);
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setSearchQuery(transcript);
+        setIsListening(false);
+      };
+
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
+
+  // Inline Editing Helpers
+  const startInlineEdit = (customerId: string, field: keyof Customer, currentValue: string | number) => {
+    setActiveCellId(`${customerId}_${field}`);
+    setInlineEdits((prev) => ({
+      ...prev,
+      [customerId]: {
+        ...prev[customerId],
+        [field]: currentValue
+      }
+    }));
+  };
+
+  const updateInlineEdit = (customerId: string, field: keyof Customer, value: string | number) => {
+    setInlineEdits((prev) => ({
+      ...prev,
+      [customerId]: {
+        ...prev[customerId],
+        [field]: value
+      }
+    }));
+  };
+
+  const saveInlineEdit = (customer: Customer) => {
+    const edits = inlineEdits[customer.id];
+    if (!edits) return;
+
+    const updated: Customer = {
+      ...customer,
+      ...edits,
+      updated_at: new Date().toISOString()
+    };
+
+    saveCustomer(updated);
+
+    setInlineEdits((prev) => {
+      const next = { ...prev };
+      delete next[customer.id];
+      return next;
+    });
+    setActiveCellId(null);
+  };
+
+  const cancelInlineEdit = (customerId: string) => {
+    setInlineEdits((prev) => {
+      const next = { ...prev };
+      delete next[customerId];
+      return next;
+    });
+    setActiveCellId(null);
+  };
 
   const filteredCustomers = customers.filter((c) => {
     if (!searchQuery.trim()) return true;
@@ -74,7 +166,9 @@ export const CustomerList: React.FC = () => {
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-900">Customer Directory ({customers.length})</h2>
-            <p className="text-xs text-slate-500">Track clients, contact details, and running dues</p>
+            <p className="text-xs text-slate-500">
+              Click directly on Name, Mobile, Address, or Dues to edit inline. Press Enter or click Save.
+            </p>
           </div>
         </div>
 
@@ -94,31 +188,45 @@ export const CustomerList: React.FC = () => {
         </div>
       </div>
 
-      {/* Search Input */}
-      <div className="relative">
+      {/* Search Input with Voice Search */}
+      <div className="relative flex items-center">
         <input
           type="text"
           placeholder="Search by customer name, mobile number, address, or GSTIN..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="input-field pl-9 text-xs"
+          className="input-field pl-9 pr-10 text-xs font-medium"
         />
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+
+        {/* Voice Search Button */}
+        <button
+          type="button"
+          onClick={startVoiceSearch}
+          className={`absolute right-2 p-1.5 rounded-md transition-all ${
+            isListening
+              ? 'bg-rose-600 text-white animate-pulse shadow-xs'
+              : 'text-slate-400 hover:text-blue-900 hover:bg-slate-100'
+          }`}
+          title="Voice Search (Speak customer name or phone)"
+        >
+          <Mic className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Customer Directory Table */}
+      {/* Customer Directory Table with Inline Editing */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="table-header">
               <tr>
-                <th className="py-3 px-4">Customer Name</th>
+                <th className="py-3 px-4">Customer Name (Click to Edit)</th>
                 <th className="py-3 px-3">Mobile Number</th>
-                <th className="py-3 px-4">Address</th>
+                <th className="py-3 px-4">Address / Area</th>
                 <th className="py-3 px-3">GSTIN (B2B)</th>
-                <th className="py-3 px-3 text-center">Bills Issued</th>
-                <th className="py-3 px-4 text-right">Dues / Balance</th>
-                <th className="py-3 px-3 text-right">Actions</th>
+                <th className="py-3 px-3 text-center">Bills</th>
+                <th className="py-3 px-4 text-right">Dues / Balance (₹)</th>
+                <th className="py-3 px-3 text-center w-28">Save / Ledger</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -131,25 +239,99 @@ export const CustomerList: React.FC = () => {
               ) : (
                 filteredCustomers.map((c) => {
                   const billCount = bills.filter(
-                    b => b.customer_id === c.id || b.customer_mobile === c.mobile
+                    (b) => b.customer_id === c.id || b.customer_mobile === c.mobile
                   ).length;
+                  const hasEdits = !!inlineEdits[c.id];
+                  const currentName = inlineEdits[c.id]?.name ?? c.name;
+                  const currentMobile = inlineEdits[c.id]?.mobile ?? c.mobile;
+                  const currentAddress = inlineEdits[c.id]?.address ?? c.address;
+                  const currentDues = inlineEdits[c.id]?.dues_balance ?? c.dues_balance;
 
                   return (
-                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{c.name}</div>
-                        <div className="text-[11px] text-slate-400">Added: {formatDate(c.created_at)}</div>
+                    <tr
+                      key={c.id}
+                      className={`transition-colors ${hasEdits ? 'bg-amber-50/60' : 'hover:bg-slate-50'}`}
+                    >
+                      {/* Customer Name */}
+                      <td className="py-2 px-4">
+                        {activeCellId === `${c.id}_name` ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={currentName}
+                            onChange={(e) => updateInlineEdit(c.id, 'name', e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlineEdit(c);
+                              if (e.key === 'Escape') cancelInlineEdit(c.id);
+                            }}
+                            className="w-full px-2 py-1 border border-blue-900 rounded text-xs font-bold bg-white"
+                          />
+                        ) : (
+                          <div
+                            onClick={() => startInlineEdit(c.id, 'name', c.name)}
+                            className="cursor-pointer group"
+                            title="Click to edit name"
+                          >
+                            <div className="font-bold text-slate-900 group-hover:text-blue-900 group-hover:underline">
+                              {c.name}
+                            </div>
+                            <div className="text-[11px] text-slate-400">Added: {formatDate(c.created_at)}</div>
+                          </div>
+                        )}
                       </td>
 
-                      <td className="py-3 px-3 font-mono font-semibold text-slate-800">
-                        {c.mobile || '-'}
+                      {/* Mobile */}
+                      <td className="py-2 px-3 font-mono font-semibold text-slate-800">
+                        {activeCellId === `${c.id}_mobile` ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={currentMobile}
+                            onChange={(e) => updateInlineEdit(c.id, 'mobile', e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlineEdit(c);
+                              if (e.key === 'Escape') cancelInlineEdit(c.id);
+                            }}
+                            className="w-28 px-2 py-1 border border-blue-900 rounded text-xs font-mono font-bold bg-white"
+                          />
+                        ) : (
+                          <div
+                            onClick={() => startInlineEdit(c.id, 'mobile', c.mobile)}
+                            className="cursor-pointer hover:text-blue-900 hover:underline"
+                            title="Click to edit mobile"
+                          >
+                            {c.mobile || '-'}
+                          </div>
+                        )}
                       </td>
 
-                      <td className="py-3 px-4 text-slate-600 max-w-xs truncate">
-                        {c.address || '-'}
+                      {/* Address */}
+                      <td className="py-2 px-4 text-slate-600 max-w-xs truncate">
+                        {activeCellId === `${c.id}_address` ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={currentAddress}
+                            onChange={(e) => updateInlineEdit(c.id, 'address', e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlineEdit(c);
+                              if (e.key === 'Escape') cancelInlineEdit(c.id);
+                            }}
+                            className="w-full px-2 py-1 border border-blue-900 rounded text-xs bg-white"
+                          />
+                        ) : (
+                          <div
+                            onClick={() => startInlineEdit(c.id, 'address', c.address || '')}
+                            className="cursor-pointer hover:text-blue-900 hover:underline"
+                            title="Click to edit address"
+                          >
+                            {c.address || '-'}
+                          </div>
+                        )}
                       </td>
 
-                      <td className="py-3 px-3">
+                      {/* GSTIN */}
+                      <td className="py-2 px-3">
                         {c.gstin ? (
                           <span className="font-mono text-[11px] font-bold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded">
                             {c.gstin}
@@ -159,28 +341,71 @@ export const CustomerList: React.FC = () => {
                         )}
                       </td>
 
-                      <td className="py-3 px-3 text-center font-bold text-slate-700">
+                      {/* Bills Count */}
+                      <td className="py-2 px-3 text-center font-bold text-slate-700">
                         {billCount}
                       </td>
 
-                      <td className="py-3 px-4 text-right font-black">
-                        {c.dues_balance > 0 ? (
-                          <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs">
-                            ₹{c.dues_balance.toFixed(2)}
-                          </span>
+                      {/* Dues / Balance */}
+                      <td className="py-2 px-4 text-right font-black">
+                        {activeCellId === `${c.id}_dues_balance` ? (
+                          <input
+                            type="number"
+                            autoFocus
+                            min="0"
+                            step="any"
+                            value={currentDues}
+                            onChange={(e) =>
+                              updateInlineEdit(c.id, 'dues_balance', parseFloat(e.target.value) || 0)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlineEdit(c);
+                              if (e.key === 'Escape') cancelInlineEdit(c.id);
+                            }}
+                            className="w-24 text-right px-2 py-1 border border-blue-900 rounded text-xs font-bold bg-white"
+                          />
                         ) : (
-                          <span className="text-emerald-700 font-semibold">₹0.00 (Clear)</span>
+                          <div
+                            onClick={() => startInlineEdit(c.id, 'dues_balance', c.dues_balance)}
+                            className="cursor-pointer"
+                            title="Click to edit dues"
+                          >
+                            {currentDues > 0 ? (
+                              <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs inline-block">
+                                ₹{currentDues.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-emerald-700 font-semibold">₹0.00 (Clear)</span>
+                            )}
+                          </div>
                         )}
                       </td>
 
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => setSelectedCustomer(c)}
-                          className="btn-secondary text-xs py-1 px-2.5"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-blue-900" />
-                          <span>Ledger & Dues</span>
-                        </button>
+                      {/* Save Button & Actions */}
+                      <td className="py-2 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* Save Inline Edit Button */}
+                          {hasEdits && (
+                            <button
+                              onClick={() => saveInlineEdit(c)}
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold flex items-center gap-1 shadow-2xs animate-pulse"
+                              title="Save inline changes"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Save</span>
+                            </button>
+                          )}
+
+                          {/* View Ledger Modal */}
+                          <button
+                            onClick={() => setSelectedCustomer(c)}
+                            className="btn-secondary text-xs py-1 px-2 text-slate-700"
+                            title="View Customer Ledger & Dues History"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-blue-900" />
+                            <span className="hidden sm:inline">Ledger</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -162,4 +162,72 @@ export interface ShopSettings {
   default_cgst_rate: number;
   default_sgst_rate: number;
   default_conditions: string;
+  dealers: DealerContact[];
+}
+
+export interface DealerContact {
+  id: string;
+  name: string;
+  phone: string;
+  specialization?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type ServiceStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE';
+
+export interface ServiceRecord {
+  id: string;
+  customer_id?: string;
+  customer_name: string;
+  customer_mobile: string;
+  service_name: string;
+  service_description?: string;
+  price: number;
+  service_date: string; // YYYY-MM-DD
+  status: ServiceStatus;
+  notes?: string;
+  assigned_worker_id?: string;
+  assigned_worker_name?: string;
+  whatsapp_sent?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppNote {
+  id: string;
+  title: string;
+  content: string;
+  product_refs: string[];
+  note_type: 'GENERAL' | 'ORDER';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface B2BBillItem {
+  id: string;
+  product_id?: string;
+  product_name: string;
+  qty: number;
+  price: number;
+  total: number;
+  image_data?: string;
+}
+
+export type B2BPaymentMethod = 'Cash' | 'PhonePe' | 'GPay' | 'Bank Transfer' | 'Credit';
+
+export interface B2BBill {
+  id: string;
+  invoice_num: string; // e.g. "B2B-001"
+  bill_date: string; // YYYY-MM-DD
+  mechanic_name: string;
+  customer_name: string;
+  customer_mobile: string;
+  customer_address?: string;
+  items: B2BBillItem[];
+  total_amount: number;
+  payment_method: B2BPaymentMethod;
+  paid_amount: number;
+  notes?: string;
+  created_at: string;
 }

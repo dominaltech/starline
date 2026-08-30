@@ -10,7 +10,10 @@ import {
   CreditNote,
   StockMovement,
   JobStatus,
-  UserRole
+  UserRole,
+  ServiceRecord,
+  AppNote,
+  B2BBill
 } from '../types';
 import {
   INITIAL_SETTINGS,
@@ -31,7 +34,11 @@ const STORAGE_KEYS = {
   CREDIT_NOTES: 'starline_credit_notes',
   STOCK_MOVEMENTS: 'starline_stock_movements',
   WORKERS: 'starline_workers',
-  ACTIVE_USER: 'starline_active_user'
+  ACTIVE_USER: 'starline_active_user',
+  SERVICE_RECORDS: 'starline_service_records',
+  APP_NOTES: 'starline_app_notes',
+  B2B_BILLS: 'starline_b2b_bills',
+  B2B_INVOICE_COUNTER: 'starline_b2b_invoice_counter'
 };
 
 class StorageEngine {
@@ -151,6 +158,18 @@ class StorageEngine {
     if (!localStorage.getItem(STORAGE_KEYS.ACTIVE_USER)) {
       this.set(STORAGE_KEYS.ACTIVE_USER, INITIAL_USERS[0]);
     }
+    if (!localStorage.getItem(STORAGE_KEYS.SERVICE_RECORDS)) {
+      this.set(STORAGE_KEYS.SERVICE_RECORDS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.APP_NOTES)) {
+      this.set(STORAGE_KEYS.APP_NOTES, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.B2B_BILLS)) {
+      this.set(STORAGE_KEYS.B2B_BILLS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.B2B_INVOICE_COUNTER)) {
+      this.set(STORAGE_KEYS.B2B_INVOICE_COUNTER, 1);
+    }
   }
 
   // --- AUTH & RBAC ---
@@ -168,7 +187,12 @@ class StorageEngine {
 
   // --- SETTINGS ---
   public getSettings(): ShopSettings {
-    return this.get<ShopSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+    const raw = this.get<ShopSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+    return {
+      ...INITIAL_SETTINGS,
+      ...raw,
+      dealers: Array.isArray(raw?.dealers) ? raw.dealers : (INITIAL_SETTINGS.dealers || [])
+    };
   }
 
   public saveSettings(settings: ShopSettings): void {
@@ -587,10 +611,130 @@ class StorageEngine {
     return newNote;
   }
 
+  // --- SERVICE RECORDS ---
+  public getServiceRecords(): ServiceRecord[] {
+    return this.get<ServiceRecord[]>(STORAGE_KEYS.SERVICE_RECORDS, []);
+  }
+
+  public saveServiceRecord(record: ServiceRecord): ServiceRecord {
+    const records = this.getServiceRecords();
+    const idx = records.findIndex(r => r.id === record.id);
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+      records[idx] = { ...record, updated_at: now };
+    } else {
+      records.unshift({ ...record, created_at: now, updated_at: now });
+    }
+    this.set(STORAGE_KEYS.SERVICE_RECORDS, records);
+    return record;
+  }
+
+  public deleteServiceRecord(id: string): void {
+    const records = this.getServiceRecords().filter(r => r.id !== id);
+    this.set(STORAGE_KEYS.SERVICE_RECORDS, records);
+  }
+
+  // --- APP NOTES ---
+  public getAppNotes(): AppNote[] {
+    return this.get<AppNote[]>(STORAGE_KEYS.APP_NOTES, []);
+  }
+
+  public saveAppNote(note: AppNote): AppNote {
+    const notes = this.getAppNotes();
+    const idx = notes.findIndex(n => n.id === note.id);
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+      notes[idx] = { ...note, updated_at: now };
+    } else {
+      notes.unshift({ ...note, created_at: now, updated_at: now });
+    }
+    this.set(STORAGE_KEYS.APP_NOTES, notes);
+    return note;
+  }
+
+  public deleteAppNote(id: string): void {
+    this.set(STORAGE_KEYS.APP_NOTES, this.getAppNotes().filter(n => n.id !== id));
+  }
+
+  // --- B2B BILLS ---
+  public getB2BBills(): B2BBill[] {
+    return this.get<B2BBill[]>(STORAGE_KEYS.B2B_BILLS, []);
+  }
+
+  public getNextB2BInvoiceNum(): string {
+    const counter = this.get<number>(STORAGE_KEYS.B2B_INVOICE_COUNTER, 1);
+    return `B2B-${String(counter).padStart(3, '0')}`;
+  }
+
+  public saveB2BBill(bill: B2BBill): B2BBill {
+    // 1. Deduct stock for each line item that has a product_id or matching product name
+    const products = this.get<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+    const now = new Date().toISOString();
+
+    bill.items.forEach((item, idx) => {
+      let targetProd: Product | undefined;
+      if (item.product_id) {
+        targetProd = products.find(p => p.id === item.product_id);
+      } else if (item.product_name && item.product_name.trim()) {
+        const nameTrim = item.product_name.trim().toLowerCase();
+        targetProd = products.find(p => p.name.toLowerCase() === nameTrim);
+      }
+
+      if (targetProd) {
+        targetProd.stock_qty -= item.qty;
+        targetProd.updated_at = now;
+        this.recordStockMovement({
+          id: 'sm_b2b_' + Date.now() + '_' + idx,
+          product_id: targetProd.id,
+          product_name: targetProd.name,
+          change_qty: -item.qty,
+          new_balance: targetProd.stock_qty,
+          type: 'SALE',
+          reference_id: bill.invoice_num,
+          notes: `B2B Sale: ${bill.invoice_num} to ${bill.customer_name}`,
+          created_at: now
+        });
+      }
+    });
+    this.set(STORAGE_KEYS.PRODUCTS, products);
+
+    // 2. Auto-create/link customer if mobile provided
+    if (bill.customer_mobile && bill.customer_mobile.trim()) {
+      const customers = this.getCustomers();
+      const existing = customers.find(c => c.mobile.trim() === bill.customer_mobile.trim());
+      if (!existing && bill.customer_name && bill.customer_name.trim()) {
+        this.saveCustomer({
+          id: 'cust_' + Date.now(),
+          name: bill.customer_name.trim(),
+          mobile: bill.customer_mobile.trim(),
+          address: bill.customer_address || '',
+          dues_balance: 0,
+          created_at: now,
+          updated_at: now
+        });
+      }
+    }
+
+    // 3. Save bill
+    const bills = this.getB2BBills();
+    bills.unshift(bill);
+    this.set(STORAGE_KEYS.B2B_BILLS, bills);
+
+    // 4. Increment counter
+    const counter = this.get<number>(STORAGE_KEYS.B2B_INVOICE_COUNTER, 1);
+    this.set(STORAGE_KEYS.B2B_INVOICE_COUNTER, counter + 1);
+
+    return bill;
+  }
+
+  public deleteB2BBill(id: string): void {
+    this.set(STORAGE_KEYS.B2B_BILLS, this.getB2BBills().filter(b => b.id !== id));
+  }
+
   // --- BACKUP & RESTORE ---
   public exportFullBackup(): Record<string, unknown> {
     return {
-      version: '1.0',
+      version: '2.0',
       exported_at: new Date().toISOString(),
       settings: this.getSettings(),
       users: this.getUsers(),
@@ -600,7 +744,10 @@ class StorageEngine {
       products: this.getProducts('super_admin'),
       bills: this.getBills(),
       credit_notes: this.getCreditNotes(),
-      stock_movements: this.getStockMovements()
+      stock_movements: this.getStockMovements(),
+      service_records: this.getServiceRecords(),
+      app_notes: this.getAppNotes(),
+      b2b_bills: this.getB2BBills()
     };
   }
 
@@ -615,6 +762,9 @@ class StorageEngine {
       if (data.bills) this.set(STORAGE_KEYS.BILLS, data.bills);
       if (data.credit_notes) this.set(STORAGE_KEYS.CREDIT_NOTES, data.credit_notes);
       if (data.stock_movements) this.set(STORAGE_KEYS.STOCK_MOVEMENTS, data.stock_movements);
+      if (data.service_records) this.set(STORAGE_KEYS.SERVICE_RECORDS, data.service_records);
+      if (data.app_notes) this.set(STORAGE_KEYS.APP_NOTES, data.app_notes);
+      if (data.b2b_bills) this.set(STORAGE_KEYS.B2B_BILLS, data.b2b_bills);
       return true;
     } catch (e) {
       console.error('Failed to import backup:', e);

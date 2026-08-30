@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import { Sidebar, NavTab } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useLanguage } from '../../context/LanguageContext';
+import { useDb } from '../../context/DbContext';
 import { BillingScreen } from '../billing/BillingScreen';
+import { B2BBillingScreen } from '../b2b/B2BBillingScreen';
 import { BillHistory } from '../billing/BillHistory';
 import { CustomerList } from '../customers/CustomerList';
 import { UdharKhataManager } from '../udhar/UdharKhataManager';
+import { ServicesManager } from '../services/ServicesManager';
+import { NotesManager } from '../notes/NotesManager';
 import { ProductList } from '../inventory/ProductList';
 import { RackSectionView } from '../inventory/RackSectionView';
 import { CreditNoteManager } from '../credit-notes/CreditNoteManager';
@@ -17,18 +21,44 @@ import { SettingsManager } from '../settings/SettingsManager';
 export const AppLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('billing');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [prefilledNoteContent, setPrefilledNoteContent] = useState<string>('');
+
   const { t } = useLanguage();
+  const { products } = useDb();
+
+  const handleStockAlertClick = () => {
+    const lowStockItems = products.filter(
+      (p) => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5)
+    );
+    const text = lowStockItems
+      .map(
+        (p) =>
+          `• ${p.name} (Current Stock: ${p.stock_qty} ${p.unit}, Min Alert: ${
+            p.min_stock_alert || 5
+          }) — Order Qty: [ ]`
+      )
+      .join('\n');
+
+    setPrefilledNoteContent(text);
+    setActiveTab('notes');
+  };
 
   const getTabTitle = () => {
     switch (activeTab) {
       case 'billing':
         return t('nav_new_invoice');
+      case 'b2b':
+        return t('nav_b2b');
       case 'history':
         return t('nav_bill_history');
       case 'customers':
         return t('nav_customers');
       case 'udhar':
         return t('nav_udhar');
+      case 'services':
+        return t('nav_services');
+      case 'notes':
+        return t('nav_notes');
       case 'inventory':
         return t('nav_products');
       case 'racks':
@@ -63,13 +93,22 @@ export const AppLayout: React.FC = () => {
         <TopBar
           activeTabTitle={getTabTitle()}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          onOpenStockAlert={handleStockAlertClick}
         />
 
         <main className="flex-1 p-3 sm:p-6">
           {activeTab === 'billing' && <BillingScreen onBillCreated={() => {}} />}
+          {activeTab === 'b2b' && <B2BBillingScreen />}
           {activeTab === 'history' && <BillHistory />}
           {activeTab === 'customers' && <CustomerList />}
           {activeTab === 'udhar' && <UdharKhataManager />}
+          {activeTab === 'services' && <ServicesManager />}
+          {activeTab === 'notes' && (
+            <NotesManager
+              initialContent={prefilledNoteContent}
+              onClearInitialContent={() => setPrefilledNoteContent('')}
+            />
+          )}
           {activeTab === 'inventory' && <ProductList />}
           {activeTab === 'racks' && <RackSectionView />}
           {activeTab === 'credit-notes' && <CreditNoteManager />}

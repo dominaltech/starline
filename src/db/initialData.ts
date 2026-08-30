@@ -15,7 +15,25 @@ export const INITIAL_SETTINGS: ShopSettings = {
   starting_credit_note_num: 101,
   default_cgst_rate: 9,
   default_sgst_rate: 9,
-  default_conditions: '(Spare and Accessories once sold will not be taken back)\nAll Part Sold in exchange of Defective part.'
+  default_conditions: '(Spare and Accessories once sold will not be taken back)\nAll Part Sold in exchange of Defective part.',
+  dealers: [
+    {
+      id: 'dlr_1',
+      name: 'Pooja Refrigeration Spares Wholesale',
+      phone: '9822012345',
+      specialization: 'Fridge & Deep Freezer Spares (Relays, Thermostats)',
+      is_active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: 'dlr_2',
+      name: 'Shree Samarth AC Spares & Copper Mart',
+      phone: '9423067890',
+      specialization: 'Copper Pipes, Refrigerant Gas R32/R410/R22, Condensers',
+      is_active: true,
+      created_at: new Date().toISOString()
+    }
+  ]
 };
 
 export const INITIAL_USERS: User[] = [

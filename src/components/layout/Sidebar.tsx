@@ -13,11 +13,28 @@ import {
   Receipt,
   LayoutGrid,
   TrendingUp,
+  ShoppingBag,
+  Wrench,
+  ClipboardList,
   Wallet,
   X
 } from 'lucide-react';
 
-export type NavTab = 'billing' | 'history' | 'customers' | 'udhar' | 'inventory' | 'racks' | 'credit-notes' | 'analytics' | 'reports' | 'gst' | 'settings';
+export type NavTab =
+  | 'billing'
+  | 'b2b'
+  | 'history'
+  | 'customers'
+  | 'udhar'
+  | 'services'
+  | 'notes'
+  | 'inventory'
+  | 'racks'
+  | 'credit-notes'
+  | 'analytics'
+  | 'reports'
+  | 'gst'
+  | 'settings';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -36,9 +53,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const navItems: { id: NavTab; labelKey: keyof Translations; icon: React.FC<{ className?: string }> }[] = [
     { id: 'billing', labelKey: 'nav_new_invoice', icon: Receipt },
+    { id: 'b2b', labelKey: 'nav_b2b', icon: ShoppingBag },
     { id: 'history', labelKey: 'nav_bill_history', icon: FileText },
     { id: 'customers', labelKey: 'nav_customers', icon: Users },
     { id: 'udhar', labelKey: 'nav_udhar', icon: Wallet },
+    { id: 'services', labelKey: 'nav_services', icon: Wrench },
+    { id: 'notes', labelKey: 'nav_notes', icon: ClipboardList },
     { id: 'inventory', labelKey: 'nav_products', icon: Package },
     { id: 'racks', labelKey: 'nav_racks', icon: LayoutGrid },
     { id: 'credit-notes', labelKey: 'nav_credit_notes', icon: RotateCcw },

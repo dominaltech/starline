@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDb } from '../../context/DbContext';
 import { ShopSettings } from '../../types';
 import { WorkerManager } from './WorkerManager';
+import { DealerManager } from './DealerManager';
 import { storage } from '../../db/storage';
 import {
   Settings,
@@ -262,6 +263,9 @@ export const SettingsManager: React.FC = () => {
 
       {/* Workers Management Component */}
       <WorkerManager />
+
+      {/* Wholesale Suppliers / Dealers Management Component */}
+      <DealerManager />
 
       {/* Backup & Data Management */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-6 space-y-4">

@@ -9,19 +9,27 @@ import { formatCurrency } from '../../utils/formatters';
 interface TopBarProps {
   activeTabTitle: string;
   onOpenMobileMenu: () => void;
+  onOpenStockAlert?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ activeTabTitle, onOpenMobileMenu }) => {
+export const TopBar: React.FC<TopBarProps> = ({
+  activeTabTitle,
+  onOpenMobileMenu,
+  onOpenStockAlert
+}) => {
   const { user, role, switchRole, isSuperAdmin } = useAuth();
   const { bills, products, customers } = useDb();
   const { t } = useLanguage();
 
   // Quick stats
   const todayStr = new Date().toISOString().split('T')[0];
-  const todayBills = bills.filter(b => b.invoice_date === todayStr && !b.is_cancelled);
+  const todayBills = bills.filter((b) => b.invoice_date === todayStr && !b.is_cancelled);
   const todayTotal = todayBills.reduce((acc, b) => acc + b.grand_total, 0);
 
-  const lowStockCount = products.filter(p => p.stock_qty <= (p.min_stock_alert || 5)).length;
+  const lowStockItems = products.filter(
+    (p) => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5)
+  );
+  const lowStockCount = lowStockItems.length;
   const totalDues = customers.reduce((acc, c) => acc + c.dues_balance, 0);
 
   return (
@@ -59,11 +67,23 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTabTitle, onOpenMobileMenu
             <span className="font-semibold text-slate-800">{formatCurrency(totalDues)}</span>
           </div>
 
+          {/* Animated Low Stock Danger Badge (Click jumps to Notes) */}
           {lowStockCount > 0 && (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-              <span>{lowStockCount} {t('topbar_low_stock')}</span>
-            </div>
+            <button
+              type="button"
+              onClick={onOpenStockAlert}
+              className="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 border border-rose-200 text-xs text-rose-700 font-bold hover:bg-rose-100 hover:border-rose-300 transition-all cursor-pointer shadow-2xs"
+              title="Low Stock Alert! Click to build wholesale order note"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
+              </span>
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
+              <span>
+                {lowStockCount} {t('topbar_low_stock')}
+              </span>
+            </button>
           )}
         </div>
 
@@ -78,7 +98,9 @@ export const TopBar: React.FC<TopBarProps> = ({ activeTabTitle, onOpenMobileMenu
             ) : (
               <UserCheck className="w-4 h-4 text-emerald-700" />
             )}
-            <span className="text-xs font-semibold text-slate-700 truncate max-w-[90px]">{user.name}</span>
+            <span className="text-xs font-semibold text-slate-700 truncate max-w-[90px]">
+              {user.name}
+            </span>
           </div>
 
           <select
