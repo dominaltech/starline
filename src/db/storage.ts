@@ -38,7 +38,8 @@ const STORAGE_KEYS = {
   SERVICE_RECORDS: 'starline_service_records',
   APP_NOTES: 'starline_app_notes',
   B2B_BILLS: 'starline_b2b_bills',
-  B2B_INVOICE_COUNTER: 'starline_b2b_invoice_counter'
+  B2B_INVOICE_COUNTER: 'starline_b2b_invoice_counter',
+  ACKNOWLEDGED_STOCK_ALERTS: 'starline_acknowledged_stock_alerts'
 };
 
 class StorageEngine {
@@ -729,6 +730,35 @@ class StorageEngine {
 
   public deleteB2BBill(id: string): void {
     this.set(STORAGE_KEYS.B2B_BILLS, this.getB2BBills().filter(b => b.id !== id));
+  }
+
+  // --- STOCK ALERT ACKNOWLEDGEMENT ---
+  public getAcknowledgedStockAlerts(): string[] {
+    return this.get<string[]>(STORAGE_KEYS.ACKNOWLEDGED_STOCK_ALERTS, []);
+  }
+
+  public acknowledgeStockAlerts(productIds?: string[]): string[] {
+    let idsToAck: string[] = [];
+    if (!productIds || productIds.length === 0) {
+      idsToAck = this.getProducts('super_admin')
+        .filter(p => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5))
+        .map(p => p.id);
+    } else {
+      idsToAck = productIds;
+    }
+    const current = this.getAcknowledgedStockAlerts();
+    const updated = Array.from(new Set([...current, ...idsToAck]));
+    this.set(STORAGE_KEYS.ACKNOWLEDGED_STOCK_ALERTS, updated);
+    return updated;
+  }
+
+  public clearAcknowledgedStockAlerts(productId?: string): void {
+    if (!productId) {
+      this.set(STORAGE_KEYS.ACKNOWLEDGED_STOCK_ALERTS, []);
+    } else {
+      const current = this.getAcknowledgedStockAlerts().filter(id => id !== productId);
+      this.set(STORAGE_KEYS.ACKNOWLEDGED_STOCK_ALERTS, current);
+    }
   }
 
   // --- BACKUP & RESTORE ---

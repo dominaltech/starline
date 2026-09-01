@@ -6,19 +6,15 @@ import {
   ShoppingBag,
   Plus,
   Trash2,
-  Printer,
   Save,
   Mic,
   Camera,
   Upload,
   CheckCircle,
   X,
-  CreditCard,
-  Phone,
-  User,
   History,
-  FileText,
-  Clock
+  RotateCcw,
+  Check
 } from 'lucide-react';
 
 export const B2BBillingScreen: React.FC = () => {
@@ -27,7 +23,6 @@ export const B2BBillingScreen: React.FC = () => {
     customers,
     workers,
     b2bBills,
-    settings,
     saveB2BBill,
     saveProduct,
     deleteB2BBill
@@ -45,6 +40,9 @@ export const B2BBillingScreen: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<B2BPaymentMethod>('Cash');
   const [paidAmount, setPaidAmount] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+
+  // Save Success Notification Toast
+  const [successToast, setSuccessToast] = useState<{ invoiceNum: string; amount: number } | null>(null);
 
   // Line Items State
   const [items, setItems] = useState<B2BBillItem[]>([
@@ -70,21 +68,21 @@ export const B2BBillingScreen: React.FC = () => {
   const [isListeningCust, setIsListeningCust] = useState<boolean>(false);
   const [voiceItemIndex, setVoiceItemIndex] = useState<number>(-1);
 
-  // Print Receipt Modal
-  const [printingBill, setPrintingBill] = useState<B2BBill | null>(null);
-
   // Bulk Image Upload Modal
   const [showBulkModal, setShowBulkModal] = useState<boolean>(false);
   const [bulkDrafts, setBulkDrafts] = useState<
     Array<{ id: string; image_data: string; name: string; price: string; qty: string }>
   >([]);
 
+  // History search filter
+  const [historySearch, setHistorySearch] = useState<string>('');
+
   // Calculate Grand Total
   const grandTotal = items.reduce((sum, it) => sum + (it.total || 0), 0);
 
   // Update paid amount when grand total changes if it matches previous
   useEffect(() => {
-    if (!paidAmount || parseFloat(paidAmount) === 0) {
+    if (!paidAmount || parseFloat(paidAmount) === 0 || parseFloat(paidAmount) === grandTotal) {
       setPaidAmount(String(grandTotal));
     }
   }, [grandTotal]);
@@ -93,9 +91,9 @@ export const B2BBillingScreen: React.FC = () => {
   useEffect(() => {
     const q = (customerMobile || customerName).toLowerCase().trim();
     if (q.length >= 2) {
-      const results = customers.filter(
-        (c) => c.mobile.includes(q) || c.name.toLowerCase().includes(q)
-      ).slice(0, 6);
+      const results = customers
+        .filter((c) => c.mobile.includes(q) || c.name.toLowerCase().includes(q))
+        .slice(0, 5);
       setCustomerSearchResults(results);
       setShowCustDropdown(results.length > 0);
     } else {
@@ -124,7 +122,7 @@ export const B2BBillingScreen: React.FC = () => {
     ]);
   };
 
-  const removeItem = (idx: number) => {
+  const removeItem = (index: number) => {
     if (items.length <= 1) {
       setItems([
         {
@@ -137,33 +135,43 @@ export const B2BBillingScreen: React.FC = () => {
       ]);
       return;
     }
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateItemField = (idx: number, field: keyof B2BBillItem, value: string | number) => {
-    setItems((prev) =>
-      prev.map((item, i) => {
-        if (i !== idx) return item;
-        const updated = { ...item, [field]: value };
-        if (field === 'qty' || field === 'price') {
-          const q = field === 'qty' ? Number(value) || 0 : item.qty;
-          const p = field === 'price' ? Number(value) || 0 : item.price;
-          updated.total = q * p;
-        }
-        return updated;
-      })
-    );
+  const updateItemField = (
+    index: number,
+    field: keyof B2BBillItem,
+    val: string | number | undefined
+  ) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      const target = { ...updated[index], [field]: val };
+
+      if (field === 'qty' || field === 'price') {
+        const q = typeof target.qty === 'number' ? target.qty : parseFloat(target.qty as any) || 0;
+        const p = typeof target.price === 'number' ? target.price : parseFloat(target.price as any) || 0;
+        target.total = Math.round(q * p * 100) / 100;
+      }
+
+      updated[index] = target;
+      return updated;
+    });
   };
 
-  const handleProductNameChange = (idx: number, text: string) => {
-    updateItemField(idx, 'product_name', text);
-    setActiveItemIndex(idx);
+  // Product Autocomplete per row
+  const handleProductInputChange = (index: number, val: string) => {
+    updateItemField(index, 'product_name', val);
+    setActiveItemIndex(index);
 
-    if (text.trim().length >= 1) {
-      const q = text.toLowerCase().trim();
+    if (val.trim().length >= 1) {
+      const q = val.toLowerCase().trim();
       const matches = products
-        .filter((p) => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)))
-        .slice(0, 8);
+        .filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.sku && p.sku.toLowerCase().includes(q))
+        )
+        .slice(0, 5);
       setProductSearchResults(matches);
       setShowProductDropdown(matches.length > 0);
     } else {
@@ -171,48 +179,49 @@ export const B2BBillingScreen: React.FC = () => {
     }
   };
 
-  const selectProduct = (idx: number, prod: Product) => {
-    setItems((prev) =>
-      prev.map((item, i) =>
-        i !== idx
-          ? item
-          : {
-              ...item,
-              product_id: prod.id,
-              product_name: prod.name,
-              price: prod.selling_price,
-              total: item.qty * prod.selling_price,
-              image_data: prod.image_data || item.image_data
-            }
-      )
-    );
+  const selectProduct = (index: number, prod: Product) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      const currentQty = updated[index]?.qty || 1;
+      const price = prod.selling_price || 0;
+      updated[index] = {
+        ...updated[index],
+        product_id: prod.id,
+        product_name: prod.name,
+        price: price,
+        qty: currentQty,
+        total: Math.round(currentQty * price * 100) / 100,
+        image_data: prod.image_data || updated[index]?.image_data
+      };
+      return updated;
+    });
     setShowProductDropdown(false);
   };
 
-  // Image Upload for Item
-  const handleItemImageUpload = (idx: number, file: File) => {
-    if (file.size > 800000) {
-      alert('Image should be under 800KB.');
+  // Image Upload from PC
+  const handleImageFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 850 * 1024) {
+      alert('Photo is larger than 800KB. Please select a smaller photo for optimal offline storage.');
       return;
     }
+
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string;
-      setItems((prev) =>
-        prev.map((item, i) => (i === idx ? { ...item, image_data: base64 } : item))
-      );
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      updateItemField(index, 'image_data', base64);
     };
     reader.readAsDataURL(file);
   };
 
-  // Voice Search for Product in Row
-  const startProductVoiceSearch = (idx: number) => {
+  // Voice recognition for Product Name per row
+  const startVoiceProduct = (index: number) => {
     const SpeechRecognition =
-      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).SpeechRecognition ||
-      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).webkitSpeechRecognition;
-
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Voice search is supported in Chrome & Edge browsers.');
+      alert('Voice search is not supported by your browser. Please use Google Chrome or Edge.');
       return;
     }
 
@@ -222,11 +231,11 @@ export const B2BBillingScreen: React.FC = () => {
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
 
-      setVoiceItemIndex(idx);
+      setVoiceItemIndex(index);
 
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
-        handleProductNameChange(idx, transcript);
+        handleProductInputChange(index, transcript);
         setVoiceItemIndex(-1);
       };
 
@@ -239,14 +248,12 @@ export const B2BBillingScreen: React.FC = () => {
     }
   };
 
-  // Voice Search for Customer
-  const startCustomerVoiceSearch = () => {
+  // Voice recognition for Customer Name
+  const startVoiceCustomer = () => {
     const SpeechRecognition =
-      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).SpeechRecognition ||
-      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).webkitSpeechRecognition;
-
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Voice search is supported in Chrome & Edge browsers.');
+      alert('Voice search is not supported by your browser. Please use Google Chrome or Edge.');
       return;
     }
 
@@ -307,7 +314,7 @@ export const B2BBillingScreen: React.FC = () => {
     bulkDrafts.forEach((draft) => {
       if (!draft.name.trim()) return;
       saveProduct({
-        id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         name: draft.name.trim(),
         unit: 'NOS',
         selling_price: parseFloat(draft.price) || 0,
@@ -324,11 +331,31 @@ export const B2BBillingScreen: React.FC = () => {
     alert(`Added ${bulkDrafts.length} independent products into catalog!`);
   };
 
-  // Save B2B Bill
-  const handleSaveBill = (shouldPrint = false) => {
+  // Reset Form Cleanly
+  const handleResetForm = () => {
+    setCustomerName('');
+    setCustomerMobile('');
+    setCustomerAddress('');
+    setMechanicName('');
+    setPaidAmount('');
+    setNotes('');
+    setPaymentMethod('Cash');
+    setItems([
+      {
+        id: 'b2bi_' + Date.now() + '_0',
+        product_name: '',
+        qty: 1,
+        price: 0,
+        total: 0
+      }
+    ]);
+  };
+
+  // Save B2B Bill (Purely Saved into History — No Print popup required!)
+  const handleSaveBill = () => {
     const validItems = items.filter((i) => i.product_name.trim().length > 0);
     if (validItems.length === 0) {
-      alert('Please add at least one product with name and quantity.');
+      alert('Please add at least one product name and price.');
       return;
     }
 
@@ -351,30 +378,14 @@ export const B2BBillingScreen: React.FC = () => {
       created_at: new Date().toISOString()
     };
 
-    const saved = saveB2BBill(newBill);
+    saveB2BBill(newBill);
 
-    if (shouldPrint) {
-      setPrintingBill(saved);
-    } else {
-      alert(`B2B Daily Bill #${saved.invoice_num} saved successfully!`);
-    }
+    // Show instant success notification banner
+    setSuccessToast({ invoiceNum: newBill.invoice_num, amount: currentGrandTotal });
+    setTimeout(() => setSuccessToast(null), 5000);
 
-    // Reset Form
-    setCustomerName('');
-    setCustomerMobile('');
-    setCustomerAddress('');
-    setMechanicName('');
-    setPaidAmount('');
-    setNotes('');
-    setItems([
-      {
-        id: 'b2bi_' + Date.now() + '_0',
-        product_name: '',
-        qty: 1,
-        price: 0,
-        total: 0
-      }
-    ]);
+    // Reset Form for next customer without scrolling
+    handleResetForm();
   };
 
   // Delete B2B Bill
@@ -385,7 +396,7 @@ export const B2BBillingScreen: React.FC = () => {
     }
   };
 
-  // Metrics for Today's B2B Billing
+  // Today's metrics
   const todayStr = formatDateInput();
   const todaysBills = b2bBills.filter((b) => b.bill_date === todayStr);
   const todaysTotal = todaysBills.reduce((sum, b) => sum + b.total_amount, 0);
@@ -396,32 +407,54 @@ export const B2BBillingScreen: React.FC = () => {
     .filter((b) => b.payment_method !== 'Cash')
     .reduce((sum, b) => sum + b.total_amount, 0);
 
+  // Filtered History
+  const filteredHistory = b2bBills.filter((b) => {
+    if (!historySearch.trim()) return true;
+    const q = historySearch.toLowerCase().trim();
+    return (
+      b.invoice_num.toLowerCase().includes(q) ||
+      b.customer_name.toLowerCase().includes(q) ||
+      b.mechanic_name.toLowerCase().includes(q) ||
+      (b.customer_mobile && b.customer_mobile.includes(q))
+    );
+  });
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
-      {/* Top Banner & Quick Metrics */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center">
-            <ShoppingBag className="w-6 h-6" />
+    <div className="max-w-7xl mx-auto space-y-3 pb-6">
+      {/* Slim Header & Live Metric Bar (Single-Screen Fit) */}
+      <div className="bg-white px-4 py-2.5 rounded-lg border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
+            <ShoppingBag className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>B2B Daily Mechanic Billing</span>
-              <span className="text-[11px] font-semibold bg-blue-100 text-blue-900 px-2 py-0.5 rounded">
-                Daily Counter
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>B2B Daily Counter</span>
+              <span className="text-[10px] font-bold bg-blue-100 text-blue-900 px-1.5 py-0.2 rounded">
+                Mechanic Billing
               </span>
             </h2>
-            <p className="text-xs text-slate-500">
-              Instant part bills for mechanics with per-item photos, voice search, and payment modes.
-            </p>
           </div>
         </div>
 
-        {/* View Switcher & Action buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <label className="btn-secondary text-xs px-3 py-2 cursor-pointer inline-flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100">
-            <Upload className="w-4 h-4 text-blue-900" />
-            <span>Bulk Upload Images</span>
+        {/* Live Daily Metrics Pills */}
+        <div className="flex items-center gap-2 text-xs flex-wrap">
+          <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded text-slate-600 font-medium">
+            Today: <strong className="text-slate-900">{formatCurrency(todaysTotal)}</strong> ({todaysBills.length})
+          </span>
+          <span className="bg-emerald-50 border border-emerald-200 px-2 py-1 rounded text-emerald-800 font-medium">
+            Cash: <strong>{formatCurrency(cashTotal)}</strong>
+          </span>
+          <span className="bg-blue-50 border border-blue-200 px-2 py-1 rounded text-blue-900 font-medium">
+            Online: <strong>{formatCurrency(onlineTotal)}</strong>
+          </span>
+        </div>
+
+        {/* Header Action Buttons */}
+        <div className="flex items-center gap-1.5">
+          <label className="btn-secondary text-xs px-2.5 py-1.5 cursor-pointer inline-flex items-center gap-1 bg-slate-50 hover:bg-slate-100" title="Bulk upload product photos from PC">
+            <Upload className="w-3.5 h-3.5 text-blue-900" />
+            <span>Bulk Upload Photos</span>
             <input
               type="file"
               multiple
@@ -434,269 +467,234 @@ export const B2BBillingScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'new' ? 'history' : 'new')}
-            className={`btn-secondary text-xs px-3.5 py-2 ${
+            className={`btn-secondary text-xs px-3 py-1.5 ${
               activeTab === 'history' ? 'bg-[#0F2942] text-white border-[#0F2942]' : ''
             }`}
           >
-            <History className="w-4 h-4" />
-            <span>{activeTab === 'new' ? `Daily Log (${b2bBills.length})` : 'New B2B Bill'}</span>
+            <History className="w-3.5 h-3.5" />
+            <span>{activeTab === 'new' ? `History (${b2bBills.length})` : 'Counter Billing'}</span>
           </button>
         </div>
       </div>
 
-      {/* Today's KPI Counters */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="card p-3.5 bg-white border-l-4 border-l-blue-900">
-          <div className="text-[11px] font-semibold text-slate-500">Today&apos;s Bills</div>
-          <div className="text-xl font-black text-slate-900 mt-1">{todaysBills.length}</div>
+      {/* Success Notification Banner (Auto-clears, stays on screen with zero scroll) */}
+      {successToast && (
+        <div className="bg-emerald-50 border border-emerald-300 px-4 py-2 rounded-lg flex items-center justify-between text-xs animate-fadeIn shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-bold text-emerald-950">
+              Daily Bill #{successToast.invoiceNum} ({formatCurrency(successToast.amount)}) saved directly to History!
+            </span>
+            <span className="text-emerald-700 hidden sm:inline">— Screen cleared & ready for next bill.</span>
+          </div>
+          <button
+            onClick={() => setSuccessToast(null)}
+            className="text-emerald-700 hover:text-emerald-900 font-bold px-1"
+          >
+            ✕
+          </button>
         </div>
-
-        <div className="card p-3.5 bg-white border-l-4 border-l-emerald-600">
-          <div className="text-[11px] font-semibold text-slate-500">Today&apos;s Revenue</div>
-          <div className="text-xl font-black text-emerald-800 mt-1">{formatCurrency(todaysTotal)}</div>
-        </div>
-
-        <div className="card p-3.5 bg-white border-l-4 border-l-amber-500">
-          <div className="text-[11px] font-semibold text-slate-500">Cash Received</div>
-          <div className="text-xl font-black text-slate-900 mt-1">{formatCurrency(cashTotal)}</div>
-        </div>
-
-        <div className="card p-3.5 bg-white border-l-4 border-l-purple-600">
-          <div className="text-[11px] font-semibold text-slate-500">Online / Bank</div>
-          <div className="text-xl font-black text-slate-900 mt-1">{formatCurrency(onlineTotal)}</div>
-        </div>
-      </div>
+      )}
 
       {activeTab === 'new' ? (
-        /* New B2B Bill Form */
-        <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-5 space-y-5">
-          {/* Header Controls: Date, Mechanic, Payment Method */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-b border-slate-200 pb-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <span>Bill Date</span>
-              </label>
-              <input
-                type="date"
-                value={billDate}
-                onChange={(e) => setBillDate(e.target.value)}
-                className="input-field text-xs font-semibold"
-              />
-            </div>
+        /* Single-Screen Fast Counter Form */
+        <div className="space-y-2.5">
+          {/* Row 1: Compact Customer & Counter Info (Single Row Fit) */}
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 items-end text-xs">
+              {/* Date */}
+              <div>
+                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Date</label>
+                <input
+                  type="date"
+                  value={billDate}
+                  onChange={(e) => setBillDate(e.target.value)}
+                  className="input-field text-xs py-1 px-2 font-medium"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <User className="w-3.5 h-3.5 text-slate-400" />
-                <span>Mechanic / Staff Name</span>
-              </label>
-              <input
-                type="text"
-                list="worker-suggestions"
-                value={mechanicName}
-                onChange={(e) => setMechanicName(e.target.value)}
-                placeholder="e.g. Asif Mechanic / Mohsin"
-                className="input-field text-xs font-semibold"
-              />
-              <datalist id="worker-suggestions">
-                {workers.map((w) => (
-                  <option key={w.id} value={w.name} />
-                ))}
-              </datalist>
-            </div>
+              {/* Mechanic / Tech */}
+              <div>
+                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Mechanic / Staff</label>
+                <input
+                  type="text"
+                  list="mechanic-suggestions"
+                  value={mechanicName}
+                  onChange={(e) => setMechanicName(e.target.value)}
+                  placeholder="e.g. Ramesh Shinde"
+                  className="input-field text-xs py-1 px-2 font-semibold"
+                />
+                <datalist id="mechanic-suggestions">
+                  {workers.map((w) => (
+                    <option key={w.id} value={w.name} />
+                  ))}
+                  <option value="Self Counter Pickup" />
+                  <option value="Workshop Service Tech" />
+                </datalist>
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-                <span>Payment Method</span>
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as B2BPaymentMethod)}
-                className="input-field text-xs font-bold cursor-pointer"
-              >
-                <option value="Cash">Cash (रोख)</option>
-                <option value="PhonePe">PhonePe / UPI</option>
-                <option value="GPay">Google Pay (GPay)</option>
-                <option value="Bank Transfer">Bank Transfer (NEFT/IMPS)</option>
-                <option value="Credit">Credit / Udhar (उधार)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Customer Details Row with Voice Search */}
-          <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2 relative">
-            <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
-              <span>Customer / Mechanic Buyer Details</span>
-              <span className="text-[10.5px] font-normal text-slate-500">Auto-suggests from customer base</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Customer Name with Voice Search */}
               <div className="relative">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
-                  Customer / Workshop Name
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Type name or speak..."
-                    className="input-field text-xs pr-8 font-semibold"
-                  />
+                <div className="flex justify-between items-center mb-0.5">
+                  <label className="block text-[10.5px] font-bold text-slate-600">Customer Name</label>
                   <button
                     type="button"
-                    onClick={startCustomerVoiceSearch}
-                    className={`absolute right-1.5 p-1 rounded ${
-                      isListeningCust
-                        ? 'bg-rose-600 text-white animate-pulse'
-                        : 'text-slate-400 hover:text-blue-900'
+                    onClick={startVoiceCustomer}
+                    className={`text-[10px] font-bold px-1 rounded flex items-center gap-0.5 ${
+                      isListeningCust ? 'bg-rose-100 text-rose-600 animate-pulse' : 'text-slate-400 hover:text-blue-900'
                     }`}
                     title="Speak customer name"
                   >
-                    <Mic className="w-3.5 h-3.5" />
+                    <Mic className="w-3 h-3" />
                   </button>
                 </div>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Mechanic / Client name..."
+                  className="input-field text-xs py-1 px-2 font-semibold"
+                />
+                {showCustDropdown && (
+                  <div className="absolute top-full left-0 right-0 z-40 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-36 overflow-y-auto mt-1">
+                    {customerSearchResults.map((c) => (
+                      <div
+                        key={c.id}
+                        onClick={() => selectCustomer(c)}
+                        className="p-1.5 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
+                      >
+                        <span className="font-bold text-slate-900">{c.name}</span>
+                        <span className="text-slate-400 font-mono text-[10.5px]">{c.mobile}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Mobile */}
+              {/* Customer Mobile */}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
-                  Mobile Number (10-Digit)
-                </label>
+                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Mobile (Optional)</label>
                 <input
                   type="tel"
                   maxLength={10}
                   value={customerMobile}
-                  onChange={(e) => setCustomerMobile(e.target.value)}
-                  placeholder="e.g. 9890123456"
-                  className="input-field text-xs font-mono font-bold"
+                  onChange={(e) => setCustomerMobile(e.target.value.replace(/\D/g, ''))}
+                  placeholder="10-digit number..."
+                  className="input-field text-xs py-1 px-2 font-mono"
                 />
               </div>
 
-              {/* Address */}
+              {/* Payment Mode */}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
-                  Address / Workshop Location
-                </label>
+                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Payment Method</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as B2BPaymentMethod)}
+                  className="input-field text-xs py-1 px-2 font-bold bg-white cursor-pointer"
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="PhonePe">PhonePe / UPI</option>
+                  <option value="GPay">Google Pay</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Credit">Credit / Udhar</option>
+                </select>
+              </div>
+
+              {/* Amount Paid */}
+              <div>
+                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Amount Paid (₹)</label>
                 <input
-                  type="text"
-                  value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
-                  placeholder="Area / Garage name, Solapur"
-                  className="input-field text-xs"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value)}
+                  placeholder={String(grandTotal)}
+                  className="input-field text-xs py-1 px-2 font-bold text-right font-mono"
                 />
               </div>
             </div>
-
-            {/* Customer Dropdown Suggestions */}
-            {showCustDropdown && customerSearchResults.length > 0 && (
-              <div className="absolute top-full left-3 right-3 z-30 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-48 overflow-y-auto mt-1">
-                {customerSearchResults.map((c) => (
-                  <div
-                    key={c.id}
-                    onClick={() => selectCustomer(c)}
-                    className="p-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-900">{c.name}</span>
-                      <span className="text-slate-500 font-mono ml-2">({c.mobile})</span>
-                    </div>
-                    <span className="text-slate-400 text-[11px]">{c.address}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* Line Items Table */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                B2B Spares & Items List ({items.length})
-              </h3>
+          {/* Row 2: Line Items Table (Fixed Container, Scrollable Rows with Zero Page Scroll) */}
+          <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+            <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                <span>Part Items ({items.length})</span>
+                <span className="text-[11px] text-slate-400 font-normal">
+                  — Type to search parts catalog or upload photo
+                </span>
+              </span>
+
               <button
                 type="button"
                 onClick={addItem}
-                className="btn-primary text-xs py-1 px-3"
+                className="btn-secondary text-xs py-1 px-2.5 font-bold flex items-center gap-1 text-blue-900 border-blue-200 bg-blue-50/50 hover:bg-blue-100"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Add Item</span>
+                <span>+ Add Item</span>
               </button>
             </div>
 
-            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+            {/* Scrollable table body only — keeps whole screen compact */}
+            <div className="max-h-[260px] md:max-h-[280px] overflow-y-auto">
               <table className="w-full text-xs text-left">
-                <thead className="table-header">
+                <thead className="table-header sticky top-0 z-20 text-[11px]">
                   <tr>
-                    <th className="py-2.5 px-3 w-8 text-center">#</th>
-                    <th className="py-2.5 px-3 w-16 text-center">Photo</th>
-                    <th className="py-2.5 px-3">Part / Product Name (Typeahead & Voice)</th>
-                    <th className="py-2.5 px-3 w-24 text-center">Quantity</th>
-                    <th className="py-2.5 px-3 w-32 text-right">Price (₹)</th>
-                    <th className="py-2.5 px-3 w-32 text-right">Total (₹)</th>
-                    <th className="py-2.5 px-2 w-10 text-center"></th>
+                    <th className="py-1.5 px-2 text-center w-12">Photo</th>
+                    <th className="py-1.5 px-3">Product / Part Name *</th>
+                    <th className="py-1.5 px-2 text-center w-20">Qty</th>
+                    <th className="py-1.5 px-2 text-right w-28">Price (₹)</th>
+                    <th className="py-1.5 px-3 text-right w-28">Total (₹)</th>
+                    <th className="py-1.5 px-2 text-center w-10"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-100">
                   {items.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="py-2 px-3 text-center text-slate-400 font-semibold">
-                        {idx + 1}
-                      </td>
-
-                      {/* Item Photo Upload Thumbnail */}
-                      <td className="py-2 px-2 text-center">
-                        {item.image_data ? (
-                          <div className="relative inline-block group">
+                    <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                      {/* Photo Thumbnail / Upload */}
+                      <td className="py-1 px-2 text-center align-middle">
+                        <label className="cursor-pointer group relative inline-block">
+                          {item.image_data ? (
                             <img
                               src={item.image_data}
-                              alt="Part"
-                              className="w-9 h-9 object-cover rounded border border-slate-300 shadow-2xs"
+                              alt="part"
+                              className="w-8 h-8 object-cover rounded border border-slate-300 shadow-2xs group-hover:opacity-75"
                             />
-                            <button
-                              type="button"
-                              onClick={() => updateItemField(idx, 'image_data', '')}
-                              className="absolute -top-1 -right-1 bg-rose-600 text-white rounded-full p-0.5 shadow-2xs hover:bg-rose-700"
-                              title="Remove photo"
-                            >
-                              <X className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="w-9 h-9 bg-slate-100 hover:bg-blue-50 text-slate-400 hover:text-blue-900 rounded border border-dashed border-slate-300 mx-auto flex items-center justify-center cursor-pointer transition-colors" title="Upload part photo from PC">
-                            <Camera className="w-4 h-4" />
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleItemImageUpload(idx, file);
-                              }}
-                            />
-                          </label>
-                        )}
+                          ) : (
+                            <div className="w-8 h-8 rounded border border-dashed border-slate-300 flex items-center justify-center text-slate-400 group-hover:text-blue-900 group-hover:border-blue-900 bg-slate-50">
+                              <Camera className="w-3.5 h-3.5" />
+                            </div>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageFileChange(idx, e)}
+                            className="hidden"
+                          />
+                        </label>
                       </td>
 
                       {/* Product Name with Typeahead and Voice Search */}
-                      <td className="py-2 px-3 relative">
-                        <div className="relative flex items-center">
+                      <td className="py-1 px-3 relative">
+                        <div className="flex items-center gap-1">
                           <input
                             type="text"
                             value={item.product_name}
-                            onChange={(e) => handleProductNameChange(idx, e.target.value)}
-                            placeholder="Type part name (e.g. Copper Pipe 1/4)..."
-                            className="input-field text-xs pr-8 font-semibold"
+                            onChange={(e) => handleProductInputChange(idx, e.target.value)}
+                            onFocus={() => {
+                              setActiveItemIndex(idx);
+                              if (item.product_name.trim().length >= 1) setShowProductDropdown(true);
+                            }}
+                            placeholder="Type part name (e.g. 45 MFD Capacitor, Relay, R134a Gas)..."
+                            className="input-field text-xs py-1 px-2 font-semibold flex-1"
                           />
+
                           <button
                             type="button"
-                            onClick={() => startProductVoiceSearch(idx)}
-                            className={`absolute right-1.5 p-1 rounded transition-all ${
-                              voiceItemIndex === idx
-                                ? 'bg-rose-600 text-white animate-pulse shadow-xs'
-                                : 'text-slate-400 hover:text-blue-900'
+                            onClick={() => startVoiceProduct(idx)}
+                            className={`p-1 rounded text-slate-400 hover:text-blue-900 ${
+                              voiceItemIndex === idx ? 'bg-rose-100 text-rose-600 animate-pulse' : ''
                             }`}
                             title="Speak part name"
                           >
@@ -706,16 +704,16 @@ export const B2BBillingScreen: React.FC = () => {
 
                         {/* Product Typeahead Dropdown */}
                         {showProductDropdown && activeItemIndex === idx && productSearchResults.length > 0 && (
-                          <div className="absolute top-full left-3 right-3 z-40 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-48 overflow-y-auto mt-1">
+                          <div className="absolute top-full left-3 right-3 z-40 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-44 overflow-y-auto mt-0.5">
                             {productSearchResults.map((prod) => (
                               <div
                                 key={prod.id}
                                 onClick={() => selectProduct(idx, prod)}
-                                className="p-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs"
+                                className="p-1.5 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs"
                               >
                                 <div>
                                   <span className="font-bold text-slate-900">{prod.name}</span>
-                                  <span className="text-slate-400 text-[11px] ml-2">({prod.unit})</span>
+                                  <span className="text-slate-400 text-[10.5px] ml-2">({prod.unit})</span>
                                 </div>
                                 <div className="text-right">
                                   <span className="font-bold text-blue-900">₹{prod.selling_price}</span>
@@ -730,7 +728,7 @@ export const B2BBillingScreen: React.FC = () => {
                       </td>
 
                       {/* Quantity */}
-                      <td className="py-2 px-3">
+                      <td className="py-1 px-2">
                         <input
                           type="number"
                           min="1"
@@ -738,12 +736,12 @@ export const B2BBillingScreen: React.FC = () => {
                           onChange={(e) =>
                             updateItemField(idx, 'qty', parseInt(e.target.value, 10) || 1)
                           }
-                          className="input-field text-xs text-center font-bold font-mono"
+                          className="input-field text-xs py-1 text-center font-bold font-mono"
                         />
                       </td>
 
                       {/* Price */}
-                      <td className="py-2 px-3">
+                      <td className="py-1 px-2">
                         <input
                           type="number"
                           min="0"
@@ -752,21 +750,21 @@ export const B2BBillingScreen: React.FC = () => {
                           onChange={(e) =>
                             updateItemField(idx, 'price', parseFloat(e.target.value) || 0)
                           }
-                          className="input-field text-xs text-right font-bold"
+                          className="input-field text-xs py-1 text-right font-bold font-mono"
                         />
                       </td>
 
                       {/* Line Total */}
-                      <td className="py-2 px-3 text-right font-black text-slate-900">
+                      <td className="py-1 px-3 text-right font-black text-slate-900 font-mono">
                         ₹{(item.total || 0).toFixed(2)}
                       </td>
 
                       {/* Remove Button */}
-                      <td className="py-2 px-2 text-center">
+                      <td className="py-1 px-2 text-center">
                         <button
                           type="button"
                           onClick={() => removeItem(idx)}
-                          className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50"
+                          className="p-1 text-slate-300 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
                           title="Remove item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -779,263 +777,147 @@ export const B2BBillingScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Bottom Bar: Notes, Totals & Save Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-200">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Bill Notes / Additional Remarks
-              </label>
-              <textarea
-                rows={2}
+          {/* Row 3: Bottom Action & Totals Bar (Always Visible on Screen without Scrolling) */}
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-3">
+            {/* Left: Optional Bill Remark */}
+            <div className="flex-1 w-full sm:max-w-md">
+              <input
+                type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Parts given on exchange of defective item..."
-                className="input-field text-xs"
+                placeholder="Optional remark (e.g. Parts given in exchange, warranty terms)..."
+                className="input-field text-xs py-1.5 px-2.5 font-medium"
               />
             </div>
 
-            <div className="space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col justify-between">
-              <div className="flex justify-between items-center text-sm">
-                <span className="font-bold text-slate-700">Grand Total:</span>
-                <span className="text-xl font-black text-slate-900">{formatCurrency(grandTotal)}</span>
+            {/* Right: Grand Total & Instant Save Button (Purely Saved in History, Zero Print Popup) */}
+            <div className="flex items-center gap-4 self-end sm:self-auto w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Total:</span>
+                <span className="text-xl font-black text-slate-900 font-mono tracking-tight">
+                  {formatCurrency(grandTotal)}
+                </span>
               </div>
 
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-semibold text-slate-600">Amount Received (₹):</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={paidAmount}
-                  onChange={(e) => setPaidAmount(e.target.value)}
-                  className="w-32 text-right input-field text-xs font-bold"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSaveBill(false)}
-                  className="btn-secondary text-xs px-4 py-2"
+                  onClick={handleResetForm}
+                  className="btn-secondary text-xs px-2.5 py-2 text-slate-500 hover:text-slate-800"
+                  title="Clear inputs"
                 >
-                  <Save className="w-4 h-4 text-blue-900" />
-                  <span>Save Bill</span>
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Clear</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => handleSaveBill(true)}
-                  className="btn-primary text-xs px-5 py-2"
+                  onClick={handleSaveBill}
+                  className="px-5 py-2 bg-[#0F2942] hover:bg-[#1e3a5f] text-white rounded text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                  title="Save bill directly to history"
                 >
-                  <Printer className="w-4 h-4" />
-                  <span>Save & Print Slip</span>
+                  <Save className="w-4 h-4" />
+                  <span>Save Bill to History</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
       ) : (
-        /* B2B Bills History Log Table */
+        /* B2B Bills History Log View */
         <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-900">
-              B2B Daily Billing Records ({b2bBills.length})
-            </h3>
-            <button
-              type="button"
-              onClick={() => setActiveTab('new')}
-              className="btn-primary text-xs py-1 px-3"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Bill</span>
-            </button>
+          <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Daily Billing History ({b2bBills.length} Bills)
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <input
+                type="text"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Search history by bill #, customer, mechanic..."
+                className="input-field text-xs py-1 px-2.5 w-full sm:w-64"
+              />
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('new')}
+                className="btn-primary text-xs py-1 px-3 shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Bill</span>
+              </button>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="table-header">
-                <tr>
-                  <th className="py-2.5 px-3">Slip #</th>
-                  <th className="py-2.5 px-3">Date</th>
-                  <th className="py-2.5 px-3">Mechanic</th>
-                  <th className="py-2.5 px-3">Customer & Phone</th>
-                  <th className="py-2.5 px-3">Items Sold</th>
-                  <th className="py-2.5 px-3 text-center">Payment</th>
-                  <th className="py-2.5 px-3 text-right">Total (₹)</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {b2bBills.length === 0 ? (
+          <div className="max-h-[500px] overflow-y-auto">
+            {filteredHistory.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs italic">
+                No billing records found. Click &quot;New Bill&quot; to start daily counter billing.
+              </div>
+            ) : (
+              <table className="w-full text-xs text-left">
+                <thead className="table-header sticky top-0 z-10 text-[11px]">
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400 italic">
-                      No B2B bills recorded yet.
-                    </td>
+                    <th className="py-2 px-3">Invoice #</th>
+                    <th className="py-2 px-3">Date</th>
+                    <th className="py-2 px-3">Customer / Mechanic</th>
+                    <th className="py-2 px-3">Items Summary</th>
+                    <th className="py-2 px-3 text-center">Payment</th>
+                    <th className="py-2 px-3 text-right">Grand Total</th>
+                    <th className="py-2 px-3 text-center w-12">Action</th>
                   </tr>
-                ) : (
-                  b2bBills.map((bill) => (
-                    <tr key={bill.id} className="hover:bg-slate-50">
-                      <td className="py-2.5 px-3 font-bold font-mono text-red-600">
-                        {bill.invoice_num}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredHistory.map((b) => (
+                    <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 font-mono font-bold text-blue-900">
+                        {b.invoice_num}
                       </td>
-                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
-                        {formatDate(bill.bill_date)}
+                      <td className="py-2 px-3 text-slate-500 whitespace-nowrap">
+                        {formatDate(b.bill_date)}
                       </td>
-                      <td className="py-2.5 px-3 font-semibold text-slate-900">
-                        {bill.mechanic_name || '-'}
+                      <td className="py-2 px-3">
+                        <div className="font-bold text-slate-900">{b.customer_name}</div>
+                        <div className="text-[10px] text-slate-400">Staff: {b.mechanic_name}</div>
                       </td>
-                      <td className="py-2.5 px-3">
-                        <div className="font-semibold text-slate-900">{bill.customer_name}</div>
-                        <div className="text-[10.5px] font-mono text-slate-400">
-                          {bill.customer_mobile || '-'}
-                        </div>
+                      <td className="py-2 px-3 max-w-xs truncate text-slate-600">
+                        {b.items.map((it) => `${it.product_name} (${it.qty})`).join(', ')}
                       </td>
-                      <td className="py-2.5 px-3 text-slate-700 max-w-xs truncate">
-                        {bill.items.map((it) => `${it.product_name} (${it.qty})`).join(', ')}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
+                      <td className="py-2 px-3 text-center">
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                            bill.payment_method === 'Cash'
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            b.payment_method === 'Cash'
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : b.payment_method === 'Credit'
                               ? 'bg-amber-100 text-amber-900'
                               : 'bg-blue-100 text-blue-900'
                           }`}
                         >
-                          {bill.payment_method}
+                          {b.payment_method}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-black text-slate-900">
-                        {formatCurrency(bill.total_amount)}
+                      <td className="py-2 px-3 text-right font-black text-slate-900 font-mono">
+                        {formatCurrency(b.total_amount)}
                       </td>
-                      <td className="py-2.5 px-3 text-right">
-                        <div className="flex justify-end items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setPrintingBill(bill)}
-                            className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-slate-100 rounded"
-                            title="Print Slip"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBill(bill.id, bill.invoice_num)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
-                            title="Delete Bill"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      <td className="py-2 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBill(b.id, b.invoice_num)}
+                          className="p-1 text-slate-300 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
+                          title="Delete Bill"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Printable Receipt Modal */}
-      {printingBill && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-blue-900" />
-                <span>B2B Slip #{printingBill.invoice_num}</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setPrintingBill(null)}
-                className="text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Slip Printable Body */}
-            <div className="border border-slate-300 rounded p-4 bg-white text-xs space-y-3 font-sans">
-              <div className="text-center border-b border-slate-200 pb-2">
-                <h2 className="text-base font-black text-slate-900">{settings.shop_name}</h2>
-                <p className="text-[10px] text-slate-500">{settings.address_line1} {settings.city}</p>
-                <p className="text-[10px] font-mono">Mobile: {settings.mobiles}</p>
-                <div className="mt-1 text-[11px] font-bold text-red-700">
-                  B2B DAILY MECHANIC CASH SLIP
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <span className="text-slate-500">Slip No:</span>{' '}
-                  <strong className="font-mono">{printingBill.invoice_num}</strong>
-                </div>
-                <div className="text-right">
-                  <span className="text-slate-500">Date:</span>{' '}
-                  <strong>{formatDate(printingBill.bill_date)}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-500">Mechanic:</span>{' '}
-                  <strong>{printingBill.mechanic_name}</strong>
-                </div>
-                <div className="text-right">
-                  <span className="text-slate-500">Payment:</span>{' '}
-                  <strong>{printingBill.payment_method}</strong>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-slate-500">Customer:</span>{' '}
-                  <strong>{printingBill.customer_name}</strong> ({printingBill.customer_mobile || '-'})
-                </div>
-              </div>
-
-              <table className="w-full text-[11px] border-t border-b border-slate-200 py-1">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-600 font-semibold">
-                    <th className="py-1 text-left">Item</th>
-                    <th className="py-1 text-center w-12">Qty</th>
-                    <th className="py-1 text-right w-16">Price</th>
-                    <th className="py-1 text-right w-16">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {printingBill.items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td className="py-1 font-medium">{it.product_name}</td>
-                      <td className="py-1 text-center font-mono">{it.qty}</td>
-                      <td className="py-1 text-right">₹{it.price}</td>
-                      <td className="py-1 text-right font-bold">₹{it.total}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-
-              <div className="flex justify-between items-center text-sm font-black pt-1">
-                <span>Grand Total:</span>
-                <span>{formatCurrency(printingBill.total_amount)}</span>
-              </div>
-
-              <div className="text-[10px] text-slate-400 italic text-center pt-2">
-                Thank you! All parts sold on replacement guarantee.
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setPrintingBill(null)}
-                className="btn-secondary text-xs"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="btn-primary text-xs px-4"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Print Slip</span>
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -1043,7 +925,7 @@ export const B2BBillingScreen: React.FC = () => {
       {/* Bulk Images Draft Modal */}
       {showBulkModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full p-4 space-y-3 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-200 pb-2">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Upload className="w-4 h-4 text-blue-900" />
@@ -1062,18 +944,16 @@ export const B2BBillingScreen: React.FC = () => {
               Each photo will be created as an independent product in the stock inventory. Review details below:
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto p-1">
               {bulkDrafts.map((draft, idx) => (
-                <div key={draft.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                <div key={draft.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
                   <img
                     src={draft.image_data}
                     alt={draft.name}
-                    className="w-full h-24 object-cover rounded border border-slate-300"
+                    className="w-full h-20 object-cover rounded border border-slate-300"
                   />
                   <div>
-                    <label className="block text-[10px] font-semibold text-slate-600">
-                      Product Name *
-                    </label>
+                    <label className="block text-[10px] font-semibold text-slate-600">Product Name *</label>
                     <input
                       type="text"
                       value={draft.name}
@@ -1083,10 +963,10 @@ export const B2BBillingScreen: React.FC = () => {
                           prev.map((d, i) => (i === idx ? { ...d, name: val } : d))
                         );
                       }}
-                      className="input-field text-xs font-semibold py-1"
+                      className="input-field text-xs font-semibold py-0.5 px-1.5"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-600">Price (₹)</label>
                       <input
@@ -1099,7 +979,7 @@ export const B2BBillingScreen: React.FC = () => {
                             prev.map((d, i) => (i === idx ? { ...d, price: val } : d))
                           );
                         }}
-                        className="input-field text-xs font-bold py-1"
+                        className="input-field text-xs font-bold py-0.5 px-1.5"
                       />
                     </div>
                     <div>
@@ -1114,7 +994,7 @@ export const B2BBillingScreen: React.FC = () => {
                             prev.map((d, i) => (i === idx ? { ...d, qty: val } : d))
                           );
                         }}
-                        className="input-field text-xs font-bold py-1"
+                        className="input-field text-xs font-bold py-0.5 px-1.5"
                       />
                     </div>
                   </div>
@@ -1126,16 +1006,16 @@ export const B2BBillingScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowBulkModal(false)}
-                className="btn-secondary text-xs"
+                className="btn-secondary text-xs py-1.5 px-3"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveBulkDrafts}
-                className="btn-primary text-xs px-4"
+                className="btn-primary text-xs py-1.5 px-4"
               >
-                <CheckCircle className="w-4 h-4" />
+                <Check className="w-4 h-4" />
                 <span>Save All Products</span>
               </button>
             </div>

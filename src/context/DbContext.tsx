@@ -28,6 +28,9 @@ interface DbContextType {
   serviceRecords: ServiceRecord[];
   appNotes: AppNote[];
   b2bBills: B2BBill[];
+  acknowledgedAlerts: string[];
+  acknowledgeStockAlerts: (productIds?: string[]) => void;
+  resetStockAlerts: (productId?: string) => void;
   refreshData: () => void;
   saveSettings: (s: ShopSettings) => void;
   createBill: (b: Omit<Bill, 'id' | 'created_at'>) => Bill;
@@ -64,6 +67,9 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>(() => storage.getServiceRecords());
   const [appNotes, setAppNotes] = useState<AppNote[]>(() => storage.getAppNotes());
   const [b2bBills, setB2BBills] = useState<B2BBill[]>(() => storage.getB2BBills());
+  const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<string[]>(() =>
+    storage.getAcknowledgedStockAlerts()
+  );
 
   const refreshData = useCallback(() => {
     setSettings(storage.getSettings());
@@ -77,7 +83,18 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setServiceRecords(storage.getServiceRecords());
     setAppNotes(storage.getAppNotes());
     setB2BBills(storage.getB2BBills());
+    setAcknowledgedAlerts(storage.getAcknowledgedStockAlerts());
   }, [role]);
+
+  const handleAcknowledgeStockAlerts = (productIds?: string[]) => {
+    const updated = storage.acknowledgeStockAlerts(productIds);
+    setAcknowledgedAlerts(updated);
+  };
+
+  const handleResetStockAlerts = (productId?: string) => {
+    storage.clearAcknowledgedStockAlerts(productId);
+    setAcknowledgedAlerts(storage.getAcknowledgedStockAlerts());
+  };
 
   useEffect(() => {
     refreshData();
@@ -192,6 +209,9 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     serviceRecords,
     appNotes,
     b2bBills,
+    acknowledgedAlerts,
+    acknowledgeStockAlerts: handleAcknowledgeStockAlerts,
+    resetStockAlerts: handleResetStockAlerts,
     refreshData,
     saveSettings: handleSaveSettings,
     createBill: handleCreateBill,

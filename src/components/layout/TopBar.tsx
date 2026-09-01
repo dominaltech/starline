@@ -18,7 +18,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenStockAlert
 }) => {
   const { user, role, switchRole, isSuperAdmin } = useAuth();
-  const { bills, products, customers } = useDb();
+  const { bills, products, customers, acknowledgedAlerts, acknowledgeStockAlerts } = useDb();
   const { t } = useLanguage();
 
   // Quick stats
@@ -26,11 +26,18 @@ export const TopBar: React.FC<TopBarProps> = ({
   const todayBills = bills.filter((b) => b.invoice_date === todayStr && !b.is_cancelled);
   const todayTotal = todayBills.reduce((acc, b) => acc + b.grand_total, 0);
 
-  const lowStockItems = products.filter(
-    (p) => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5)
+  const unhandledLowStockItems = products.filter(
+    (p) =>
+      p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5) &&
+      !acknowledgedAlerts.includes(p.id)
   );
-  const lowStockCount = lowStockItems.length;
+  const lowStockCount = unhandledLowStockItems.length;
   const totalDues = customers.reduce((acc, c) => acc + c.dues_balance, 0);
+
+  const handleDismissAlert = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    acknowledgeStockAlerts(unhandledLowStockItems.map((p) => p.id));
+  };
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
@@ -69,21 +76,32 @@ export const TopBar: React.FC<TopBarProps> = ({
 
           {/* Animated Low Stock Danger Badge (Click jumps to Notes) */}
           {lowStockCount > 0 && (
-            <button
-              type="button"
-              onClick={onOpenStockAlert}
-              className="group relative flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 border border-rose-200 text-xs text-rose-700 font-bold hover:bg-rose-100 hover:border-rose-300 transition-all cursor-pointer shadow-2xs"
-              title="Low Stock Alert! Click to build wholesale order note"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
-              </span>
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
-              <span>
-                {lowStockCount} {t('topbar_low_stock')}
-              </span>
-            </button>
+            <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 rounded-md p-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={onOpenStockAlert}
+                className="group flex items-center gap-1.5 px-2 py-0.5 text-xs text-rose-700 font-bold hover:text-rose-900 transition-all cursor-pointer"
+                title="Low Stock Alert! Click to open Notes & auto-fill order"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
+                </span>
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
+                <span>
+                  {lowStockCount} {t('topbar_low_stock')}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDismissAlert}
+                className="p-1 rounded text-rose-400 hover:text-rose-700 hover:bg-rose-100 transition-colors"
+                title="Dismiss low stock alert notification"
+                aria-label="Dismiss stock alert"
+              >
+                <span className="text-[10px] font-bold">✕</span>
+              </button>
+            </div>
           )}
         </div>
 

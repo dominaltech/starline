@@ -17,6 +17,7 @@ import { FinancialReports } from '../reports/FinancialReports';
 import { AnalyticsDashboard } from '../analytics/AnalyticsDashboard';
 import { GstExportHub } from '../gst/GstExportHub';
 import { SettingsManager } from '../settings/SettingsManager';
+import { formatDate } from '../../utils/formatters';
 
 export const AppLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('billing');
@@ -27,19 +28,48 @@ export const AppLayout: React.FC = () => {
   const { products } = useDb();
 
   const handleStockAlertClick = () => {
-    const lowStockItems = products.filter(
+    // 1. Identify low stock items (or lowest stock items if none below alert)
+    let itemsToOrder = products.filter(
       (p) => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5)
     );
-    const text = lowStockItems
-      .map(
-        (p) =>
-          `• ${p.name} (Current Stock: ${p.stock_qty} ${p.unit}, Min Alert: ${
-            p.min_stock_alert || 5
-          }) — Order Qty: [ ]`
-      )
-      .join('\n');
+    if (itemsToOrder.length === 0) {
+      itemsToOrder = [...products].sort((a, b) => a.stock_qty - b.stock_qty).slice(0, 3);
+    }
 
-    setPrefilledNoteContent(text);
+    const todayDate = formatDate(new Date().toISOString());
+    let totalEstimatedValue = 0;
+
+    const itemsText = itemsToOrder
+      .map((p, idx) => {
+        const minAlert = p.min_stock_alert || 5;
+        const reorderQty = Math.max(5, minAlert * 2 - p.stock_qty);
+        const estPrice = p.buy_price || p.selling_price || 0;
+        const lineTotal = reorderQty * estPrice;
+        totalEstimatedValue += lineTotal;
+
+        return (
+          `${idx + 1}. ${p.name}${p.sku ? ` [SKU: ${p.sku}]` : ''}\n` +
+          `   • Current Stock: ${p.stock_qty} ${p.unit} (Min Threshold: ${minAlert} ${p.unit})\n` +
+          `   • Reorder Qty: ${reorderQty} ${p.unit} | Approx Rate: ₹${estPrice}\n` +
+          `   • Line Total: ₹${lineTotal.toFixed(2)}`
+        );
+      })
+      .join('\n\n');
+
+    const formattedOrder =
+      `======================================================\n` +
+      `STAR LINE SERVICES — LOW STOCK PURCHASE ORDER\n` +
+      `Date: ${todayDate} | Status: Order Prepared for Supplier\n` +
+      `======================================================\n\n` +
+      `ITEMS TO REORDER:\n\n` +
+      `${itemsText}\n\n` +
+      `------------------------------------------------------\n` +
+      `Total Line Items: ${itemsToOrder.length}\n` +
+      `Estimated Order Value: ₹${totalEstimatedValue.toFixed(2)}\n` +
+      `Required Dispatch: Earliest express delivery requested.\n` +
+      `======================================================`;
+
+    setPrefilledNoteContent(formattedOrder);
     setActiveTab('notes');
   };
 
