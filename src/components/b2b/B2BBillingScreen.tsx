@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDb } from '../../context/DbContext';
 import { B2BBill, B2BBillItem, B2BPaymentMethod, Customer, Product } from '../../types';
 import { formatDate, formatDateInput, formatCurrency } from '../../utils/formatters';
+import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
 import {
   ShoppingBag,
   Plus,
@@ -55,15 +56,6 @@ export const B2BBillingScreen: React.FC = () => {
     }
   ]);
 
-  // Product Autocomplete State per Row
-  const [activeItemIndex, setActiveItemIndex] = useState<number>(-1);
-  const [productSearchResults, setProductSearchResults] = useState<Product[]>([]);
-  const [showProductDropdown, setShowProductDropdown] = useState<boolean>(false);
-
-  // Customer Autocomplete State
-  const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
-  const [showCustDropdown, setShowCustDropdown] = useState<boolean>(false);
-
   // Voice Search States
   const [isListeningCust, setIsListeningCust] = useState<boolean>(false);
   const [voiceItemIndex, setVoiceItemIndex] = useState<number>(-1);
@@ -87,25 +79,49 @@ export const B2BBillingScreen: React.FC = () => {
     }
   }, [grandTotal]);
 
-  // Customer search typeahead
-  useEffect(() => {
-    const q = (customerMobile || customerName).toLowerCase().trim();
-    if (q.length >= 2) {
-      const results = customers
-        .filter((c) => c.mobile.includes(q) || c.name.toLowerCase().includes(q))
-        .slice(0, 5);
-      setCustomerSearchResults(results);
-      setShowCustDropdown(results.length > 0);
-    } else {
-      setShowCustDropdown(false);
-    }
-  }, [customerMobile, customerName, customers]);
+  // Options for Searchable Comboboxes (shows all entries on dropdown icon click!)
+  const mechanicOptions = React.useMemo<ComboboxOption[]>(() => {
+    return [
+      { id: 'self', label: 'Self Counter Pickup', subLabel: 'Counter Walk-in' },
+      { id: 'workshop', label: 'Workshop Service Tech', subLabel: 'Internal Workshop Repair' },
+      ...workers.map((w) => ({
+        id: w.id,
+        label: w.name,
+        subLabel: w.specialization ? `${w.specialization} (${w.phone})` : w.phone,
+        badge: 'Staff'
+      }))
+    ];
+  }, [workers]);
+
+  const customerOptions = React.useMemo<ComboboxOption[]>(() => {
+    return customers.map((c) => ({
+      id: c.id,
+      label: c.name,
+      subLabel: c.mobile ? `Mobile: ${c.mobile}${c.address ? ` | ${c.address}` : ''}` : c.address,
+      badge: c.dues_balance > 0 ? `Dues: ₹${c.dues_balance}` : undefined,
+      badgeColor: c.dues_balance > 0 ? 'bg-amber-100 text-amber-900' : undefined,
+      data: c
+    }));
+  }, [customers]);
+
+  const productOptions = React.useMemo<ComboboxOption[]>(() => {
+    return products.map((p) => ({
+      id: p.id,
+      label: p.name,
+      subLabel: `${p.sku ? `[${p.sku}] ` : ''}Stock: ${p.stock_qty} ${p.unit}`,
+      badge: `₹${p.selling_price}`,
+      badgeColor:
+        p.stock_qty <= (p.min_stock_alert || 5)
+          ? 'bg-rose-100 text-rose-900'
+          : 'bg-emerald-100 text-emerald-900',
+      data: p
+    }));
+  }, [products]);
 
   const selectCustomer = (c: Customer) => {
     setCustomerName(c.name);
     setCustomerMobile(c.mobile);
     setCustomerAddress(c.address || '');
-    setShowCustDropdown(false);
   };
 
   // Line item manipulation
@@ -158,26 +174,6 @@ export const B2BBillingScreen: React.FC = () => {
     });
   };
 
-  // Product Autocomplete per row
-  const handleProductInputChange = (index: number, val: string) => {
-    updateItemField(index, 'product_name', val);
-    setActiveItemIndex(index);
-
-    if (val.trim().length >= 1) {
-      const q = val.toLowerCase().trim();
-      const matches = products
-        .filter(
-          (p) =>
-            p.name.toLowerCase().includes(q) ||
-            (p.sku && p.sku.toLowerCase().includes(q))
-        )
-        .slice(0, 5);
-      setProductSearchResults(matches);
-      setShowProductDropdown(matches.length > 0);
-    } else {
-      setShowProductDropdown(false);
-    }
-  };
 
   const selectProduct = (index: number, prod: Product) => {
     setItems((prev) => {
@@ -195,7 +191,6 @@ export const B2BBillingScreen: React.FC = () => {
       };
       return updated;
     });
-    setShowProductDropdown(false);
   };
 
   // Image Upload from PC
@@ -516,59 +511,30 @@ export const B2BBillingScreen: React.FC = () => {
               {/* Mechanic / Tech */}
               <div>
                 <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Mechanic / Staff</label>
-                <input
-                  type="text"
-                  list="mechanic-suggestions"
+                <SearchableCombobox
                   value={mechanicName}
-                  onChange={(e) => setMechanicName(e.target.value)}
-                  placeholder="e.g. Ramesh Shinde"
-                  className="input-field text-xs py-1 px-2 font-semibold"
+                  onChange={setMechanicName}
+                  options={mechanicOptions}
+                  placeholder="Staff name..."
+                  inputClassName="py-1 px-2 font-semibold"
                 />
-                <datalist id="mechanic-suggestions">
-                  {workers.map((w) => (
-                    <option key={w.id} value={w.name} />
-                  ))}
-                  <option value="Self Counter Pickup" />
-                  <option value="Workshop Service Tech" />
-                </datalist>
               </div>
 
-              {/* Customer Name with Voice Search */}
-              <div className="relative">
-                <div className="flex justify-between items-center mb-0.5">
-                  <label className="block text-[10.5px] font-bold text-slate-600">Customer Name</label>
-                  <button
-                    type="button"
-                    onClick={startVoiceCustomer}
-                    className={`text-[10px] font-bold px-1 rounded flex items-center gap-0.5 ${
-                      isListeningCust ? 'bg-rose-100 text-rose-600 animate-pulse' : 'text-slate-400 hover:text-blue-900'
-                    }`}
-                    title="Speak customer name"
-                  >
-                    <Mic className="w-3 h-3" />
-                  </button>
-                </div>
-                <input
-                  type="text"
+              {/* Customer Name with Voice Search & All Customers Dropdown Chevron */}
+              <div>
+                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Customer Name</label>
+                <SearchableCombobox
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Mechanic / Client name..."
-                  className="input-field text-xs py-1 px-2 font-semibold"
+                  onChange={setCustomerName}
+                  onSelectOption={(opt) => {
+                    if (opt.data) selectCustomer(opt.data);
+                  }}
+                  options={customerOptions}
+                  onVoiceClick={startVoiceCustomer}
+                  isListening={isListeningCust}
+                  placeholder="Client / Mechanic name..."
+                  inputClassName="py-1 px-2 font-semibold"
                 />
-                {showCustDropdown && (
-                  <div className="absolute top-full left-0 right-0 z-40 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-36 overflow-y-auto mt-1">
-                    {customerSearchResults.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => selectCustomer(c)}
-                        className="p-1.5 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
-                      >
-                        <span className="font-bold text-slate-900">{c.name}</span>
-                        <span className="text-slate-400 font-mono text-[10.5px]">{c.mobile}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Customer Mobile */}
@@ -622,7 +588,7 @@ export const B2BBillingScreen: React.FC = () => {
               <span className="font-bold text-slate-700 flex items-center gap-1.5">
                 <span>Part Items ({items.length})</span>
                 <span className="text-[11px] text-slate-400 font-normal">
-                  — Type to search parts catalog or upload photo
+                  — Type to search or click ▼ dropdown for all catalog items
                 </span>
               </span>
 
@@ -675,56 +641,19 @@ export const B2BBillingScreen: React.FC = () => {
                         </label>
                       </td>
 
-                      {/* Product Name with Typeahead and Voice Search */}
-                      <td className="py-1 px-3 relative">
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={item.product_name}
-                            onChange={(e) => handleProductInputChange(idx, e.target.value)}
-                            onFocus={() => {
-                              setActiveItemIndex(idx);
-                              if (item.product_name.trim().length >= 1) setShowProductDropdown(true);
-                            }}
-                            placeholder="Type part name (e.g. 45 MFD Capacitor, Relay, R134a Gas)..."
-                            className="input-field text-xs py-1 px-2 font-semibold flex-1"
-                          />
-
-                          <button
-                            type="button"
-                            onClick={() => startVoiceProduct(idx)}
-                            className={`p-1 rounded text-slate-400 hover:text-blue-900 ${
-                              voiceItemIndex === idx ? 'bg-rose-100 text-rose-600 animate-pulse' : ''
-                            }`}
-                            title="Speak part name"
-                          >
-                            <Mic className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {/* Product Typeahead Dropdown */}
-                        {showProductDropdown && activeItemIndex === idx && productSearchResults.length > 0 && (
-                          <div className="absolute top-full left-3 right-3 z-40 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-44 overflow-y-auto mt-0.5">
-                            {productSearchResults.map((prod) => (
-                              <div
-                                key={prod.id}
-                                onClick={() => selectProduct(idx, prod)}
-                                className="p-1.5 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs"
-                              >
-                                <div>
-                                  <span className="font-bold text-slate-900">{prod.name}</span>
-                                  <span className="text-slate-400 text-[10.5px] ml-2">({prod.unit})</span>
-                                </div>
-                                <div className="text-right">
-                                  <span className="font-bold text-blue-900">₹{prod.selling_price}</span>
-                                  <span className="text-[10px] text-slate-400 ml-2">
-                                    Stock: {prod.stock_qty}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                      {/* Product Name with Typeahead, Voice Search and Dropdown Chevron to show all */}
+                      <td className="py-1 px-3">
+                        <SearchableCombobox
+                          value={item.product_name}
+                          onChange={(val) => updateItemField(idx, 'product_name', val)}
+                          onSelectOption={(opt) => {
+                            if (opt.data) selectProduct(idx, opt.data);
+                          }}
+                          options={productOptions}
+                          onVoiceClick={() => startVoiceProduct(idx)}
+                          isListening={voiceItemIndex === idx}
+                          placeholder="Type part name or click ▼ for all..."
+                          inputClassName="py-1 px-2 font-semibold"
                       </td>
 
                       {/* Quantity */}

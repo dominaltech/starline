@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDb } from '../../context/DbContext';
 import { Customer, Product, ServiceRecord, ServiceStatus } from '../../types';
 import { formatDate, formatDateInput, formatCurrency } from '../../utils/formatters';
+import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
 import {
   Wrench,
   Plus,
@@ -46,60 +47,60 @@ export const ServicesManager: React.FC = () => {
   const [assignedWorkerId, setAssignedWorkerId] = useState<string>('');
 
   // Autocomplete States
-  const [custSearchResults, setCustSearchResults] = useState<Customer[]>([]);
-  const [showCustDropdown, setShowCustDropdown] = useState<boolean>(false);
-
-  const [serviceSearchResults, setServiceSearchResults] = useState<Product[]>([]);
-  const [showServiceDropdown, setShowServiceDropdown] = useState<boolean>(false);
-
   // WhatsApp Language Preference
   const [waLanguage, setWaLanguage] = useState<'mr' | 'hi' | 'en'>('mr');
 
   // Voice Search for Service Modal
   const [isListeningCust, setIsListeningCust] = useState<boolean>(false);
 
-  // Customer Autocomplete Search
-  useEffect(() => {
-    const q = (custMobile || custName).toLowerCase().trim();
-    if (q.length >= 2) {
-      const matches = customers.filter(
-        (c) => c.mobile.includes(q) || c.name.toLowerCase().includes(q)
-      ).slice(0, 6);
-      setCustSearchResults(matches);
-      setShowCustDropdown(matches.length > 0);
-    } else {
-      setShowCustDropdown(false);
-    }
-  }, [custMobile, custName, customers]);
+  // Options for Searchable Comboboxes (shows all entries on dropdown chevron click!)
+  const customerOptions = React.useMemo<ComboboxOption[]>(() => {
+    return customers.map((c) => ({
+      id: c.id,
+      label: c.name,
+      subLabel: c.mobile ? `Mobile: ${c.mobile}${c.address ? ` | ${c.address}` : ''}` : c.address,
+      badge: c.dues_balance > 0 ? `Dues: ₹${c.dues_balance}` : undefined,
+      badgeColor: c.dues_balance > 0 ? 'bg-amber-100 text-amber-900' : undefined,
+      data: c
+    }));
+  }, [customers]);
+
+  const serviceOptions = React.useMemo<ComboboxOption[]>(() => {
+    return products.map((p) => ({
+      id: p.id,
+      label: p.name,
+      subLabel: p.unit === 'SERVICE' ? 'Service / Labor' : `Spare Part (Stock: ${p.stock_qty} ${p.unit})`,
+      badge: `₹${p.selling_price}`,
+      badgeColor: p.unit === 'SERVICE' ? 'bg-blue-100 text-blue-900' : 'bg-slate-100 text-slate-700',
+      data: p
+    }));
+  }, [products]);
+
+  const workerOptions = React.useMemo<ComboboxOption[]>(() => {
+    return [
+      { id: '', label: 'Unassigned', subLabel: 'No technician assigned yet' },
+      ...workers.filter(w => w.is_active).map((w) => ({
+        id: w.id,
+        label: w.name,
+        subLabel: w.specialization ? `${w.specialization} (${w.phone})` : w.phone,
+        badge: 'Tech',
+        data: w
+      }))
+    ];
+  }, [workers]);
+
+  const assignedWorkerName = workers.find(w => w.id === assignedWorkerId)?.name || '';
 
   const selectCustomer = (c: Customer) => {
     setCustName(c.name);
     setCustMobile(c.mobile);
-    setShowCustDropdown(false);
-  };
-
-  // Service Name Autocomplete (Product Catalog match)
-  const handleServiceNameChange = (text: string) => {
-    setServiceName(text);
-    if (text.trim().length >= 1) {
-      const q = text.toLowerCase().trim();
-      const matches = products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.unit === 'SERVICE' ||
-          (p.sku && p.sku.toLowerCase().includes(q))
-      ).slice(0, 8);
-      setServiceSearchResults(matches);
-      setShowServiceDropdown(matches.length > 0);
-    } else {
-      setShowServiceDropdown(false);
-    }
   };
 
   const selectService = (p: Product) => {
     setServiceName(p.name);
-    setPrice(String(p.selling_price || ''));
-    setShowServiceDropdown(false);
+    if (p.selling_price) {
+      setPrice(String(p.selling_price));
+    }
   };
 
   // Voice Search for Customer in Modal
@@ -562,32 +563,22 @@ export const ServicesManager: React.FC = () => {
             </div>
 
             <form onSubmit={handleSave} className="space-y-3 text-xs">
-              {/* Customer Selection Row with Voice Search */}
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 relative">
+              {/* Customer Selection Row with Voice Search & Dropdown Chevron */}
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
                 <label className="block font-semibold text-slate-700">Customer Details *</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      value={custName}
-                      onChange={(e) => setCustName(e.target.value)}
-                      placeholder="Customer Name..."
-                      className="input-field font-semibold pr-7"
-                    />
-                    <button
-                      type="button"
-                      onClick={startCustomerVoiceSearch}
-                      className={`absolute right-1.5 top-1.5 p-1 rounded ${
-                        isListeningCust
-                          ? 'bg-rose-600 text-white animate-pulse'
-                          : 'text-slate-400 hover:text-blue-900'
-                      }`}
-                      title="Speak customer name"
-                    >
-                      <Mic className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <SearchableCombobox
+                    value={custName}
+                    onChange={setCustName}
+                    onSelectOption={(opt) => {
+                      if (opt.data) selectCustomer(opt.data);
+                    }}
+                    options={customerOptions}
+                    onVoiceClick={startCustomerVoiceSearch}
+                    isListening={isListeningCust}
+                    placeholder="Customer Name or click ▼..."
+                    inputClassName="font-semibold"
+                  />
 
                   <div>
                     <input
@@ -600,53 +591,23 @@ export const ServicesManager: React.FC = () => {
                     />
                   </div>
                 </div>
-
-                {/* Customer Dropdown */}
-                {showCustDropdown && custSearchResults.length > 0 && (
-                  <div className="absolute top-full left-3 right-3 z-30 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-36 overflow-y-auto mt-1">
-                    {custSearchResults.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => selectCustomer(c)}
-                        className="p-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs"
-                      >
-                        <span className="font-bold text-slate-900">{c.name}</span>
-                        <span className="font-mono text-slate-500">{c.mobile}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
-              {/* Service Name (with Product Catalog typeahead) */}
-              <div className="relative">
+              {/* Service Name (with Product & Service Catalog Combobox) */}
+              <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   Service / Repair Work *
                 </label>
-                <input
-                  type="text"
-                  required
+                <SearchableCombobox
                   value={serviceName}
-                  onChange={(e) => handleServiceNameChange(e.target.value)}
-                  placeholder="e.g. AC Gas Charging / Refrigerator PCB Repair"
-                  className="input-field font-bold"
+                  onChange={setServiceName}
+                  onSelectOption={(opt) => {
+                    if (opt.data) selectService(opt.data);
+                  }}
+                  options={serviceOptions}
+                  placeholder="e.g. AC Gas Charging or click ▼ for all..."
+                  inputClassName="font-bold"
                 />
-
-                {/* Service typeahead suggestions */}
-                {showServiceDropdown && serviceSearchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-30 bg-white border border-slate-300 rounded-lg shadow-xl divide-y divide-slate-100 max-h-40 overflow-y-auto mt-1">
-                    {serviceSearchResults.map((p) => (
-                      <div
-                        key={p.id}
-                        onClick={() => selectService(p)}
-                        className="p-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs"
-                      >
-                        <span className="font-bold text-slate-900">{p.name}</span>
-                        <span className="font-bold text-blue-900">₹{p.selling_price}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Service Description */}
@@ -709,18 +670,19 @@ export const ServicesManager: React.FC = () => {
                   <label className="block font-semibold text-slate-700 mb-1">
                     Assigned Technician
                   </label>
-                  <select
-                    value={assignedWorkerId}
-                    onChange={(e) => setAssignedWorkerId(e.target.value)}
-                    className="input-field font-medium cursor-pointer"
-                  >
-                    <option value="">-- Unassigned --</option>
-                    {workers.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableCombobox
+                    value={assignedWorkerName}
+                    onChange={(val) => {
+                      const match = workers.find((w) => w.name.toLowerCase() === val.toLowerCase());
+                      setAssignedWorkerId(match ? match.id : '');
+                    }}
+                    onSelectOption={(opt) => {
+                      setAssignedWorkerId(opt.id);
+                    }}
+                    options={workerOptions}
+                    placeholder="Select technician or click ▼..."
+                    inputClassName="font-medium"
+                  />
                 </div>
               </div>
 

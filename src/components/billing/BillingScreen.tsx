@@ -4,6 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { Bill, BillItem, BillType, Customer, Product } from '../../types';
 import { numberToIndianWords } from '../../utils/numberToWords';
 import { formatDateInput, formatDate } from '../../utils/formatters';
+import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
 import { BillPrintTemplate } from './BillPrintTemplate';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -49,8 +50,6 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
   // Appliance info
   const [productNameDesc, setProductNameDesc] = useState<string>('Refrigerator');
   const [brandModelNo, setBrandModelNo] = useState<string>('');
-  const [amcStartDate, setAmcStartDate] = useState<string>('');
-  const [amcEndDate, setAmcEndDate] = useState<string>('');
 
   // Assigned Worker
   const [assignedWorkerId, setAssignedWorkerId] = useState<string>('');
@@ -61,10 +60,8 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
   // Conditions
   const [conditions, setConditions] = useState<string>(settings.default_conditions);
 
-  // Customer search typeahead state
+  // Customer search state
   const [customerSearchQuery, setCustomerSearchQuery] = useState<string>('');
-  const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState<boolean>(false);
 
   // Items State
   const [items, setItems] = useState<BillItem[]>([
@@ -85,10 +82,45 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     }
   ]);
 
-  // Product typeahead active row
-  const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
-  const [productSearchResults, setProductSearchResults] = useState<Product[]>([]);
-  const [showProductDropdown, setShowProductDropdown] = useState<boolean>(false);
+  // Options for Searchable Comboboxes (shows all entries on dropdown chevron click!)
+  const customerOptions = React.useMemo<ComboboxOption[]>(() => {
+    return customers.map((c) => ({
+      id: c.id,
+      label: c.name,
+      subLabel: c.mobile ? `Mobile: ${c.mobile}${c.address ? ` | ${c.address}` : ''}` : c.address,
+      badge: c.dues_balance > 0 ? `Dues: ₹${c.dues_balance}` : undefined,
+      badgeColor: c.dues_balance > 0 ? 'bg-amber-100 text-amber-900' : undefined,
+      data: c
+    }));
+  }, [customers]);
+
+  const productOptions = React.useMemo<ComboboxOption[]>(() => {
+    return products.map((p) => ({
+      id: p.id,
+      label: p.name,
+      subLabel: `${p.sku ? `[${p.sku}] ` : ''}${p.hsn_code ? `HSN: ${p.hsn_code} | ` : ''}Stock: ${p.stock_qty} ${p.unit}`,
+      badge: `₹${p.selling_price}`,
+      badgeColor:
+        p.stock_qty <= (p.min_stock_alert || 5)
+          ? 'bg-rose-100 text-rose-900'
+          : 'bg-emerald-100 text-emerald-900',
+      data: p
+    }));
+  }, [products]);
+
+  const workerOptions = React.useMemo<ComboboxOption[]>(() => {
+    return [
+      { id: '', label: 'Unassigned', subLabel: 'No technician assigned' },
+      ...workers.filter(w => w.is_active).map((w) => ({
+        id: w.id,
+        label: w.name,
+        subLabel: w.specialization ? `${w.specialization} (${w.phone})` : w.phone,
+        badge: 'Staff'
+      }))
+    ];
+  }, [workers]);
+
+  const assignedWorkerName = workers.find(w => w.id === assignedWorkerId)?.name || '';
 
   // Print Preview Modal State
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
@@ -104,21 +136,6 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     }
   }, [settings.starting_invoice_num]);
 
-  // Debounced Customer Search
-  useEffect(() => {
-    if (!customerSearchQuery || customerSearchQuery.trim().length < 2) {
-      setCustomerSearchResults([]);
-      setShowCustomerDropdown(false);
-      return;
-    }
-    const q = customerSearchQuery.toLowerCase().trim();
-    const matches = customers.filter(
-      c => c.mobile.includes(q) || c.name.toLowerCase().includes(q)
-    );
-    setCustomerSearchResults(matches);
-    setShowCustomerDropdown(matches.length > 0);
-  }, [customerSearchQuery, customers]);
-
   const selectCustomer = (c: Customer) => {
     setCustomerId(c.id);
     setCustomerName(c.name);
@@ -127,26 +144,13 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     setCustomerGstin(c.gstin || '');
     setCustomerDues(c.dues_balance || 0);
     setCustomerSearchQuery(c.name);
-    setShowCustomerDropdown(false);
   };
 
-  // Product Search on Item Description Change
+  // Product Selection on Item Description Change
   const handleItemDescriptionChange = (index: number, value: string) => {
     const newItems = [...items];
     newItems[index].item_description = value;
     setItems(newItems);
-    setActiveItemIndex(index);
-
-    if (value.trim().length >= 1) {
-      const q = value.toLowerCase().trim();
-      const matches = products.filter(
-        p => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q))
-      );
-      setProductSearchResults(matches);
-      setShowProductDropdown(matches.length > 0);
-    } else {
-      setShowProductDropdown(false);
-    }
   };
 
   const selectProduct = (index: number, prod: Product) => {
@@ -159,8 +163,6 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     // Recalculate amount
     calculateItemAmount(newItems, index);
     setItems(newItems);
-    setShowProductDropdown(false);
-    setActiveItemIndex(null);
   };
 
   // Handle Numeric Field Changes
@@ -279,8 +281,6 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
       customer_gstin: customerGstin.trim(),
       product_name_desc: productNameDesc.trim(),
       brand_model_no: brandModelNo.trim(),
-      amc_start_date: amcStartDate,
-      amc_end_date: amcEndDate,
       items: validItems,
       subtotal: Math.round(subtotal * 100) / 100,
       total_discount: 0,
@@ -430,8 +430,6 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     setCustomerDues(0);
     setCustomerSearchQuery('');
     setBrandModelNo('');
-    setAmcStartDate('');
-    setAmcEndDate('');
     setPaidAmount('');
     setItems([
       {
@@ -573,58 +571,23 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
         <div className="p-4 sm:p-6 border-b border-slate-200 bg-white space-y-4">
           {/* Customer Search & Name Block */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 relative">
+            <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 {t('bill_cust_name_label')}
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder={t('bill_cust_search_placeholder')}
-                  value={customerName}
-                  onChange={(e) => {
-                    setCustomerName(e.target.value);
-                    setCustomerSearchQuery(e.target.value);
-                  }}
-                  onFocus={() => {
-                    if (customerSearchQuery.length >= 2 && customerSearchResults.length > 0) {
-                      setShowCustomerDropdown(true);
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowCustomerDropdown(false), 200);
-                  }}
-                  className="input-field pr-8 font-semibold"
-                />
-                <Search className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5" />
-              </div>
-
-              {/* Customer autocomplete dropdown */}
-              {showCustomerDropdown && customerSearchResults.length > 0 && (
-                <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-md shadow-2xl mt-1 max-h-48 overflow-y-auto ring-1 ring-black/10">
-                  {customerSearchResults.map((c) => (
-                    <div
-                      key={c.id}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        selectCustomer(c);
-                      }}
-                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center text-xs"
-                    >
-                      <div>
-                        <span className="font-bold text-slate-800">{c.name}</span>
-                        <span className="text-slate-500 ml-2 font-mono">{c.mobile}</span>
-                        {c.address && <div className="text-[11px] text-slate-400">{c.address}</div>}
-                      </div>
-                      {c.dues_balance > 0 && (
-                        <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                          Dues: ₹{c.dues_balance}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <SearchableCombobox
+                value={customerName}
+                onChange={(val) => {
+                  setCustomerName(val);
+                  setCustomerSearchQuery(val);
+                }}
+                onSelectOption={(opt) => {
+                  if (opt.data) selectCustomer(opt.data);
+                }}
+                options={customerOptions}
+                placeholder={t('bill_cust_search_placeholder')}
+                inputClassName="font-semibold"
+              />
             </div>
 
             <div>
@@ -676,8 +639,8 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             )}
           </div>
 
-          {/* Appliance & AMC Details Block */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
+          {/* Appliance & Model Details Block */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_appliance')} :</label>
               <input
@@ -696,26 +659,6 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                 placeholder="e.g. LG 190L / Voltas 1.5T"
                 value={brandModelNo}
                 onChange={(e) => setBrandModelNo(e.target.value)}
-                className="input-field text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_amc_from')} :</label>
-              <input
-                type="date"
-                value={amcStartDate}
-                onChange={(e) => setAmcStartDate(e.target.value)}
-                className="input-field text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_amc_to')} :</label>
-              <input
-                type="date"
-                value={amcEndDate}
-                onChange={(e) => setAmcEndDate(e.target.value)}
                 className="input-field text-xs"
               />
             </div>
@@ -755,57 +698,17 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                   <tr key={item.id || index} className="hover:bg-slate-50/60 relative">
                     <td className="py-2 px-2 text-center font-bold text-slate-600">{index + 1}</td>
 
-                    <td className="py-2 px-3 relative">
-                      <input
-                        type="text"
-                        placeholder="Search spare or type free-text..."
+                    <td className="py-2 px-3">
+                      <SearchableCombobox
                         value={item.item_description}
-                        onChange={(e) => handleItemDescriptionChange(index, e.target.value)}
-                        onFocus={() => {
-                          setActiveItemIndex(index);
-                          if (item.item_description.length > 0) {
-                            const q = item.item_description.toLowerCase().trim();
-                            const matches = products.filter(p => p.name.toLowerCase().includes(q));
-                            setProductSearchResults(matches);
-                            setShowProductDropdown(matches.length > 0);
-                          }
+                        onChange={(val) => handleItemDescriptionChange(index, val)}
+                        onSelectOption={(opt) => {
+                          if (opt.data) selectProduct(index, opt.data);
                         }}
-                        onBlur={() => {
-                          // Short delay to allow onMouseDown to execute
-                          setTimeout(() => {
-                            setShowProductDropdown(false);
-                          }, 200);
-                        }}
-                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-900 font-medium"
+                        options={productOptions}
+                        placeholder="Type spare or click ▼ for all..."
+                        inputClassName="px-2 py-1 text-xs font-medium"
                       />
-
-                      {/* Floating Product Dropdown over table & empty space */}
-                      {showProductDropdown && activeItemIndex === index && productSearchResults.length > 0 && (
-                        <div className="absolute z-50 left-3 min-w-[340px] max-w-lg bg-white border border-slate-300 rounded-lg shadow-2xl mt-1 max-h-52 overflow-y-auto divide-y divide-slate-100 ring-1 ring-black/10">
-                          {productSearchResults.map((p) => (
-                            <div
-                              key={p.id}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                selectProduct(index, p);
-                              }}
-                              className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center text-xs transition-colors"
-                            >
-                              <div>
-                                <div className="font-bold text-slate-800">{p.name}</div>
-                                <div className="text-[10.5px] text-slate-400 font-mono flex items-center gap-2">
-                                  {p.sku && <span>SKU: {p.sku}</span>}
-                                  {p.hsn_code && <span>HSN: {p.hsn_code}</span>}
-                                  <span className="text-emerald-700 font-medium">Stock: {p.stock_qty} {p.unit}</span>
-                                </div>
-                              </div>
-                              <span className="font-extrabold text-slate-900 text-sm ml-3 shrink-0">
-                                ₹{p.selling_price}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </td>
 
                     {isGST && (
@@ -923,18 +826,19 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 {t('bill_assigned_worker')}
               </label>
-              <select
-                value={assignedWorkerId}
-                onChange={(e) => setAssignedWorkerId(e.target.value)}
-                className="input-field text-xs font-medium cursor-pointer"
-              >
-                <option value="">{t('bill_worker_none')}</option>
-                {workers.filter(w => w.is_active).map(w => (
-                  <option key={w.id} value={w.id}>
-                    {w.name} ({w.specialization || w.phone})
-                  </option>
-                ))}
-              </select>
+              <SearchableCombobox
+                value={assignedWorkerName}
+                onChange={(val) => {
+                  const match = workers.find((w) => w.name.toLowerCase() === val.toLowerCase());
+                  setAssignedWorkerId(match ? match.id : '');
+                }}
+                onSelectOption={(opt) => {
+                  setAssignedWorkerId(opt.id);
+                }}
+                options={workerOptions}
+                placeholder="Select technician / staff..."
+                inputClassName="text-xs font-medium"
+              />
             </div>
 
             <div>

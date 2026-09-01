@@ -90,8 +90,8 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, sett
         </div>
       </div>
 
-      {/* Appliance & AMC Details Block */}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 my-1.5 py-1 border-t border-b border-slate-300 text-[11px]">
+      {/* Appliance Details Block */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 my-1.5 py-1 border-t border-b border-slate-300 text-[11px]">
         <div className="flex items-baseline">
           <span className="shrink-0 font-medium mr-1">Products Name :</span>
           <span className="flex-1 border-b border-dotted border-slate-700 font-medium px-1">
@@ -99,21 +99,9 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, sett
           </span>
         </div>
         <div className="flex items-baseline">
-          <span className="shrink-0 font-medium mr-1">AMC Start Date :</span>
-          <span className="flex-1 border-b border-dotted border-slate-700 px-1">
-            {bill.amc_start_date ? formatDate(bill.amc_start_date) : '-'}
-          </span>
-        </div>
-        <div className="flex items-baseline">
           <span className="shrink-0 font-medium mr-1">Brand Model No :</span>
           <span className="flex-1 border-b border-dotted border-slate-700 font-medium px-1">
             {bill.brand_model_no || '-'}
-          </span>
-        </div>
-        <div className="flex items-baseline">
-          <span className="shrink-0 font-medium mr-1">AMC End Date :</span>
-          <span className="flex-1 border-b border-dotted border-slate-700 px-1">
-            {bill.amc_end_date ? formatDate(bill.amc_end_date) : '-'}
           </span>
         </div>
       </div>
