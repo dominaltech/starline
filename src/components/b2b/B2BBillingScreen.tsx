@@ -230,7 +230,9 @@ export const B2BBillingScreen: React.FC = () => {
 
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
-        handleProductInputChange(index, transcript);
+        updateItemField(index, 'product_name', transcript);
+        const match = products.find((p) => p.name.toLowerCase() === transcript.toLowerCase());
+        if (match) selectProduct(index, match);
         setVoiceItemIndex(-1);
       };
 
