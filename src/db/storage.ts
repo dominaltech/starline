@@ -157,7 +157,7 @@ class StorageEngine {
       this.set(STORAGE_KEYS.STOCK_MOVEMENTS, []);
     }
     if (!localStorage.getItem(STORAGE_KEYS.ACTIVE_USER)) {
-      this.set(STORAGE_KEYS.ACTIVE_USER, INITIAL_USERS[0]);
+      this.set(STORAGE_KEYS.ACTIVE_USER, INITIAL_USERS[1]);
     }
     if (!localStorage.getItem(STORAGE_KEYS.SERVICE_RECORDS)) {
       this.set(STORAGE_KEYS.SERVICE_RECORDS, []);
@@ -175,7 +175,7 @@ class StorageEngine {
 
   // --- AUTH & RBAC ---
   public getActiveUser(): User {
-    return this.get<User>(STORAGE_KEYS.ACTIVE_USER, INITIAL_USERS[0]);
+    return this.get<User>(STORAGE_KEYS.ACTIVE_USER, INITIAL_USERS[1]);
   }
 
   public setActiveUser(user: User): void {
@@ -192,7 +192,8 @@ class StorageEngine {
     return {
       ...INITIAL_SETTINGS,
       ...raw,
-      dealers: Array.isArray(raw?.dealers) ? raw.dealers : (INITIAL_SETTINGS.dealers || [])
+      dealers: Array.isArray(raw?.dealers) ? raw.dealers : (INITIAL_SETTINGS.dealers || []),
+      super_admin_password: raw?.super_admin_password || INITIAL_SETTINGS.super_admin_password || '123456'
     };
   }
 

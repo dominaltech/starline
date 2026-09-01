@@ -1,9 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useDb } from '../../context/DbContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { LanguageToggle } from './LanguageToggle';
-import { ShieldCheck, UserCheck, AlertTriangle, IndianRupee, Layers, Menu } from 'lucide-react';
+import {
+  ShieldCheck,
+  UserCheck,
+  AlertTriangle,
+  IndianRupee,
+  Layers,
+  Menu,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  X
+} from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 
 interface TopBarProps {
@@ -17,9 +29,15 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenMobileMenu,
   onOpenStockAlert
 }) => {
-  const { user, role, switchRole, isSuperAdmin } = useAuth();
+  const { user, role, switchRole, verifyAndSwitchToSuperAdmin, isSuperAdmin } = useAuth();
   const { bills, products, customers, acknowledgedAlerts, acknowledgeStockAlerts } = useDb();
   const { t } = useLanguage();
+
+  // Super Admin Password Modal States
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState<boolean>(false);
+  const [passwordInput, setPasswordInput] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Quick stats
   const todayStr = new Date().toISOString().split('T')[0];
@@ -37,6 +55,34 @@ export const TopBar: React.FC<TopBarProps> = ({
   const handleDismissAlert = (e: React.MouseEvent) => {
     e.stopPropagation();
     acknowledgeStockAlerts(unhandledLowStockItems.map((p) => p.id));
+  };
+
+  const handleRoleChange = (newRole: 'super_admin' | 'admin') => {
+    if (newRole === 'super_admin') {
+      setPasswordInput('');
+      setPasswordError('');
+      setShowPassword(false);
+      setIsPasswordModalOpen(true);
+    } else {
+      switchRole('admin');
+    }
+  };
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordInput.trim()) {
+      setPasswordError('Please enter the Super Admin password.');
+      return;
+    }
+
+    const success = verifyAndSwitchToSuperAdmin(passwordInput);
+    if (success) {
+      setIsPasswordModalOpen(false);
+      setPasswordInput('');
+      setPasswordError('');
+    } else {
+      setPasswordError('Incorrect password! Access denied.');
+    }
   };
 
   return (
@@ -123,15 +169,104 @@ export const TopBar: React.FC<TopBarProps> = ({
 
           <select
             value={role}
-            onChange={(e) => switchRole(e.target.value as 'super_admin' | 'admin')}
-            className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-900 cursor-pointer"
-            title="Switch demo role to test Admin buy-price redaction"
+            onChange={(e) => handleRoleChange(e.target.value as 'super_admin' | 'admin')}
+            className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-900 cursor-pointer"
+            title="Switch User Role"
           >
-            <option value="super_admin">Super Admin</option>
             <option value="admin">Admin</option>
+            <option value="super_admin">Super Admin</option>
           </select>
         </div>
       </div>
+
+      {/* Super Admin Password Verification Modal */}
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-5 space-y-4 animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-900 flex items-center justify-center">
+                  <Lock className="w-5 h-5 text-blue-900" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Super Admin Access</h3>
+                  <p className="text-[11px] text-slate-500">Security password required</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPasswordModalOpen(false);
+                  setPasswordInput('');
+                  setPasswordError('');
+                }}
+                className="text-slate-400 hover:text-slate-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handlePasswordSubmit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Enter Super Admin Password:
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    autoFocus
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value);
+                      setPasswordError('');
+                    }}
+                    placeholder="Enter password..."
+                    className="input-field pr-9 text-xs font-mono py-1.5"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passwordError ? (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-1">
+                    {passwordError}
+                  </p>
+                ) : (
+                  <p className="text-[10.5px] text-slate-400 mt-1">
+                    Default password is <code className="font-mono text-slate-600 bg-slate-100 px-1 py-0.5 rounded">123456</code> (manageable in Settings).
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPasswordModalOpen(false);
+                    setPasswordInput('');
+                    setPasswordError('');
+                  }}
+                  className="btn-secondary text-xs px-3 py-1.5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary text-xs px-4 py-1.5 bg-[#0F2942] hover:bg-[#1e3a5f] text-white flex items-center gap-1.5 cursor-pointer"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Verify &amp; Unlock</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

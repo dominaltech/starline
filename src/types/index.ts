@@ -163,6 +163,7 @@ export interface ShopSettings {
   default_sgst_rate: number;
   default_conditions: string;
   dealers: DealerContact[];
+  super_admin_password?: string;
 }
 
 export interface DealerContact {

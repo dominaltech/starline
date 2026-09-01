@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDb } from '../../context/DbContext';
+import { useAuth } from '../../context/AuthContext';
 import { ShopSettings } from '../../types';
 import { WorkerManager } from './WorkerManager';
 import { DealerManager } from './DealerManager';
@@ -12,14 +13,51 @@ import {
   RotateCcw,
   Building,
   CheckCircle,
-  HardDrive
+  HardDrive,
+  ShieldCheck,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound
 } from 'lucide-react';
 
 export const SettingsManager: React.FC = () => {
   const { settings, saveSettings, refreshData } = useDb();
+  const { isSuperAdmin } = useAuth();
 
   const [form, setForm] = useState<ShopSettings>({ ...settings });
   const [successMsg, setSuccessMsg] = useState<string>('');
+
+  // Super Admin Password Management States
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [showCurrentPwd, setShowCurrentPwd] = useState<boolean>(false);
+  const [showNewPwd, setShowNewPwd] = useState<boolean>(false);
+  const [passwordMsg, setPasswordMsg] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<string>('');
+
+  const handleUpdateSuperAdminPassword = () => {
+    if (!newPassword.trim()) {
+      setPasswordError('Please enter a new password (cannot be empty).');
+      return;
+    }
+    if (newPassword.trim().length < 4) {
+      setPasswordError('Password should be at least 4 characters long.');
+      return;
+    }
+
+    const updatedSettings: ShopSettings = {
+      ...settings,
+      ...form,
+      super_admin_password: newPassword.trim()
+    };
+
+    saveSettings(updatedSettings);
+    setForm(updatedSettings);
+    setNewPassword('');
+    setPasswordError('');
+    setPasswordMsg('✓ Super Admin access password updated successfully!');
+    setTimeout(() => setPasswordMsg(''), 4500);
+  };
 
   const handleChange = (field: keyof ShopSettings, value: string | number) => {
     setForm((prev) => ({
@@ -266,6 +304,113 @@ export const SettingsManager: React.FC = () => {
 
       {/* Wholesale Suppliers / Dealers Management Component */}
       <DealerManager />
+
+      {/* Super Admin Security & Password Management */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-6 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 text-blue-900" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Super Admin Access & Security Password</h3>
+              <p className="text-[11px] text-slate-500">
+                Manage the password required when switching to Proprietor (Super Admin) role
+              </p>
+            </div>
+          </div>
+          <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded ${isSuperAdmin ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600'}`}>
+            {isSuperAdmin ? '✓ Super Admin Unlocked' : 'Admin Mode'}
+          </span>
+        </div>
+
+        {isSuperAdmin ? (
+          <div className="space-y-4 text-xs">
+            {passwordMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md font-semibold text-xs flex items-center gap-2 animate-fadeIn">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{passwordMsg}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Current Super Admin Password:
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPwd ? 'text' : 'password'}
+                    readOnly
+                    value={settings.super_admin_password || '123456'}
+                    className="input-field bg-slate-100 font-mono pr-9 font-bold text-slate-900 select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPwd(!showCurrentPwd)}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    title={showCurrentPwd ? 'Hide' : 'Show'}
+                  >
+                    {showCurrentPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Current password set in system: <strong className="font-mono text-slate-700">{showCurrentPwd ? (settings.super_admin_password || '123456') : '••••••'}</strong>
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Change to New Password:
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPwd ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      setPasswordError('');
+                    }}
+                    placeholder="Enter new password (e.g. 123456)..."
+                    className="input-field font-mono pr-9 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPwd(!showNewPwd)}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    title={showNewPwd ? 'Hide' : 'Show'}
+                  >
+                    {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passwordError && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-1">{passwordError}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={handleUpdateSuperAdminPassword}
+                className="btn-primary text-xs px-4 py-2 bg-[#0F2942] hover:bg-[#1e3a5f] flex items-center gap-1.5 cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Save New Password</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-slate-400 shrink-0" />
+              <span>
+                You are currently in <strong>Admin (Staff)</strong> mode. Switch to <strong>Super Admin</strong> in the top navigation bar to manage and change the security password.
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Backup & Data Management */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-6 space-y-4">

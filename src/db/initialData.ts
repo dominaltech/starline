@@ -33,7 +33,8 @@ export const INITIAL_SETTINGS: ShopSettings = {
       is_active: true,
       created_at: new Date().toISOString()
     }
-  ]
+  ],
+  super_admin_password: '123456'
 };
 
 export const INITIAL_USERS: User[] = [

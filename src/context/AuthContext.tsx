@@ -7,17 +7,37 @@ interface AuthContextType {
   role: UserRole;
   isSuperAdmin: boolean;
   switchRole: (role: UserRole) => void;
+  verifyAndSwitchToSuperAdmin: (password: string) => boolean;
   usersList: User[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User>(() => storage.getActiveUser());
+  // Always initialize default active user as Admin as requested
+  const [user, setUser] = useState<User>(() => {
+    const users = storage.getUsers();
+    return users.find((u) => u.role === 'admin') || {
+      id: 'usr_staff',
+      username: 'staff',
+      role: 'admin',
+      name: 'Counter Biller (Admin)',
+      created_at: new Date().toISOString()
+    };
+  });
 
   useEffect(() => {
     storage.init();
-    setUser(storage.getActiveUser());
+    const users = storage.getUsers();
+    const adminUser = users.find((u) => u.role === 'admin') || {
+      id: 'usr_staff',
+      username: 'staff',
+      role: 'admin',
+      name: 'Counter Biller (Admin)',
+      created_at: new Date().toISOString()
+    };
+    storage.setActiveUser(adminUser);
+    setUser(adminUser);
   }, []);
 
   const switchRole = (newRole: UserRole) => {
@@ -33,11 +53,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(target);
   };
 
+  const verifyAndSwitchToSuperAdmin = (password: string): boolean => {
+    const settings = storage.getSettings();
+    const expectedPassword = settings.super_admin_password || '123456';
+    if (password.trim() === expectedPassword.trim()) {
+      switchRole('super_admin');
+      return true;
+    }
+    return false;
+  };
+
   const value: AuthContextType = {
     user,
     role: user.role,
     isSuperAdmin: user.role === 'super_admin',
     switchRole,
+    verifyAndSwitchToSuperAdmin,
     usersList: storage.getUsers()
   };
 
