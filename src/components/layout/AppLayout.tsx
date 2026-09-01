@@ -126,7 +126,7 @@ export const AppLayout: React.FC = () => {
           onOpenStockAlert={handleStockAlertClick}
         />
 
-        <main className="flex-1 p-3 sm:p-6">
+        <main className={`flex-1 ${activeTab === 'b2b' ? 'p-2 sm:p-3' : 'p-3 sm:p-6'}`}>
           {activeTab === 'billing' && <BillingScreen onBillCreated={() => {}} />}
           {activeTab === 'b2b' && <B2BBillingScreen />}
           {activeTab === 'history' && <BillHistory />}

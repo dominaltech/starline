@@ -415,41 +415,56 @@ export const B2BBillingScreen: React.FC = () => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-3 pb-6">
-      {/* Slim Header & Live Metric Bar (Single-Screen Fit) */}
-      <div className="bg-white px-4 py-2.5 rounded-lg border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
-            <ShoppingBag className="w-4 h-4" />
+    <div className="max-w-7xl mx-auto flex flex-col space-y-2">
+      {/* Slim Header & Live Metric Bar (Ultra-compact, zero wasted space) */}
+      <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
+            <ShoppingBag className="w-3.5 h-3.5" />
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span>B2B Daily Counter</span>
-              <span className="text-[10px] font-bold bg-blue-100 text-blue-900 px-1.5 py-0.2 rounded">
-                Mechanic Billing
-              </span>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-xs sm:text-sm font-bold text-slate-900 leading-none">
+              B2B Daily Billing
             </h2>
+            <span className="text-[10px] font-bold bg-blue-100 text-blue-900 px-1.5 py-0.2 rounded hidden sm:inline">
+              Daily Counter
+            </span>
           </div>
+
+          {/* Success Notification Pill (Inlined into header — ZERO vertical displacement) */}
+          {successToast && (
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded font-semibold animate-pulse">
+              <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+              <span>Bill #{successToast.invoiceNum} ({formatCurrency(successToast.amount)}) saved!</span>
+              <button
+                type="button"
+                onClick={() => setSuccessToast(null)}
+                className="ml-1 text-slate-400 hover:text-slate-700 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Live Daily Metrics Pills */}
-        <div className="flex items-center gap-2 text-xs flex-wrap">
-          <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded text-slate-600 font-medium">
-            Today: <strong className="text-slate-900">{formatCurrency(todaysTotal)}</strong> ({todaysBills.length})
+        {/* Live Daily Metrics & Header Action Buttons */}
+        <div className="flex items-center gap-1.5 text-xs flex-wrap">
+          <span className="bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-600 font-medium text-[11px]">
+            Today: <strong className="text-slate-900 font-mono">{formatCurrency(todaysTotal)}</strong> ({todaysBills.length})
           </span>
-          <span className="bg-emerald-50 border border-emerald-200 px-2 py-1 rounded text-emerald-800 font-medium">
-            Cash: <strong>{formatCurrency(cashTotal)}</strong>
+          <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-emerald-800 font-medium text-[11px] hidden md:inline">
+            Cash: <strong className="font-mono">{formatCurrency(cashTotal)}</strong>
           </span>
-          <span className="bg-blue-50 border border-blue-200 px-2 py-1 rounded text-blue-900 font-medium">
-            Online: <strong>{formatCurrency(onlineTotal)}</strong>
+          <span className="bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-blue-900 font-medium text-[11px] hidden md:inline">
+            Online: <strong className="font-mono">{formatCurrency(onlineTotal)}</strong>
           </span>
-        </div>
 
-        {/* Header Action Buttons */}
-        <div className="flex items-center gap-1.5">
-          <label className="btn-secondary text-xs px-2.5 py-1.5 cursor-pointer inline-flex items-center gap-1 bg-slate-50 hover:bg-slate-100" title="Bulk upload product photos from PC">
-            <Upload className="w-3.5 h-3.5 text-blue-900" />
-            <span>Bulk Upload Photos</span>
+          <label
+            className="btn-secondary text-[11px] px-2 py-1 cursor-pointer inline-flex items-center gap-1 bg-slate-50 hover:bg-slate-100 ml-1"
+            title="Bulk upload product photos from PC"
+          >
+            <Upload className="w-3 h-3 text-blue-900" />
+            <span>Bulk Photos</span>
             <input
               type="file"
               multiple
@@ -462,67 +477,48 @@ export const B2BBillingScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'new' ? 'history' : 'new')}
-            className={`btn-secondary text-xs px-3 py-1.5 ${
+            className={`btn-secondary text-[11px] px-2.5 py-1 cursor-pointer ${
               activeTab === 'history' ? 'bg-[#0F2942] text-white border-[#0F2942]' : ''
             }`}
           >
-            <History className="w-3.5 h-3.5" />
-            <span>{activeTab === 'new' ? `History (${b2bBills.length})` : 'Counter Billing'}</span>
+            <History className="w-3 h-3" />
+            <span>{activeTab === 'new' ? `History (${b2bBills.length})` : 'New Bill'}</span>
           </button>
         </div>
       </div>
 
-      {/* Success Notification Banner (Auto-clears, stays on screen with zero scroll) */}
-      {successToast && (
-        <div className="bg-emerald-50 border border-emerald-300 px-4 py-2 rounded-lg flex items-center justify-between text-xs animate-fadeIn shadow-xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="font-bold text-emerald-950">
-              Daily Bill #{successToast.invoiceNum} ({formatCurrency(successToast.amount)}) saved directly to History!
-            </span>
-            <span className="text-emerald-700 hidden sm:inline">— Screen cleared & ready for next bill.</span>
-          </div>
-          <button
-            onClick={() => setSuccessToast(null)}
-            className="text-emerald-700 hover:text-emerald-900 font-bold px-1"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       {activeTab === 'new' ? (
-        /* Single-Screen Fast Counter Form */
-        <div className="space-y-2.5">
-          {/* Row 1: Compact Customer & Counter Info (Single Row Fit) */}
-          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 items-end text-xs">
+        /* Single-Screen Fast Counter Form — Guaranteed Fit on All Screen Sizes */
+        <div className="space-y-2">
+          {/* Row 1: Compact Customer & Counter Info (Ultra-dense single row fit) */}
+          <div className="bg-white p-2 sm:p-2.5 rounded-lg border border-slate-200 shadow-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end text-xs">
               {/* Date */}
               <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Date</label>
+                <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Date</label>
                 <input
                   type="date"
                   value={billDate}
                   onChange={(e) => setBillDate(e.target.value)}
-                  className="input-field text-xs py-1 px-2 font-medium"
+                  className="input-field text-xs py-1 px-1.5 font-medium"
                 />
               </div>
 
               {/* Mechanic / Tech */}
               <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Mechanic / Staff</label>
+                <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Mechanic / Staff</label>
                 <SearchableCombobox
                   value={mechanicName}
                   onChange={setMechanicName}
                   options={mechanicOptions}
                   placeholder="Staff name..."
-                  inputClassName="py-1 px-2 font-semibold"
+                  inputClassName="py-0.5 px-1.5 text-xs font-semibold"
                 />
               </div>
 
               {/* Customer Name with Voice Search & All Customers Dropdown Chevron */}
               <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Customer Name</label>
+                <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Customer Name</label>
                 <SearchableCombobox
                   value={customerName}
                   onChange={setCustomerName}
@@ -532,31 +528,31 @@ export const B2BBillingScreen: React.FC = () => {
                   options={customerOptions}
                   onVoiceClick={startVoiceCustomer}
                   isListening={isListeningCust}
-                  placeholder="Client / Mechanic name..."
-                  inputClassName="py-1 px-2 font-semibold"
+                  placeholder="Client / Mechanic..."
+                  inputClassName="py-0.5 px-1.5 text-xs font-semibold"
                 />
               </div>
 
               {/* Customer Mobile */}
               <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Mobile (Optional)</label>
+                <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Mobile (Optional)</label>
                 <input
                   type="tel"
                   maxLength={10}
                   value={customerMobile}
                   onChange={(e) => setCustomerMobile(e.target.value.replace(/\D/g, ''))}
                   placeholder="10-digit number..."
-                  className="input-field text-xs py-1 px-2 font-mono"
+                  className="input-field text-xs py-1 px-1.5 font-mono"
                 />
               </div>
 
               {/* Payment Mode */}
               <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Payment Method</label>
+                <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Payment Method</label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as B2BPaymentMethod)}
-                  className="input-field text-xs py-1 px-2 font-bold bg-white cursor-pointer"
+                  className="input-field text-xs py-1 px-1.5 font-bold bg-white cursor-pointer"
                 >
                   <option value="Cash">Cash</option>
                   <option value="PhonePe">PhonePe / UPI</option>
@@ -568,7 +564,7 @@ export const B2BBillingScreen: React.FC = () => {
 
               {/* Amount Paid */}
               <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 mb-0.5">Amount Paid (₹)</label>
+                <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Amount Paid (₹)</label>
                 <input
                   type="number"
                   min="0"
@@ -576,18 +572,18 @@ export const B2BBillingScreen: React.FC = () => {
                   value={paidAmount}
                   onChange={(e) => setPaidAmount(e.target.value)}
                   placeholder={String(grandTotal)}
-                  className="input-field text-xs py-1 px-2 font-bold text-right font-mono"
+                  className="input-field text-xs py-1 px-1.5 font-bold text-right font-mono"
                 />
               </div>
             </div>
           </div>
 
-          {/* Row 2: Line Items Table (Fixed Container, Scrollable Rows with Zero Page Scroll) */}
+          {/* Row 2: Line Items Table (Container sized so it fits completely on screen without page scroll) */}
           <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs">
-              <span className="font-bold text-slate-700 flex items-center gap-1.5">
+            <div className="px-2.5 py-1 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-700 flex items-center gap-1 text-[11px]">
                 <span>Part Items ({items.length})</span>
-                <span className="text-[11px] text-slate-400 font-normal">
+                <span className="text-[10.5px] text-slate-400 font-normal hidden sm:inline">
                   — Type to search or click ▼ dropdown for all catalog items
                 </span>
               </span>
@@ -595,41 +591,41 @@ export const B2BBillingScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={addItem}
-                className="btn-secondary text-xs py-1 px-2.5 font-bold flex items-center gap-1 text-blue-900 border-blue-200 bg-blue-50/50 hover:bg-blue-100"
+                className="btn-secondary text-[11px] py-0.5 px-2 font-bold flex items-center gap-1 text-blue-900 border-blue-200 bg-blue-50/60 hover:bg-blue-100 cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3 h-3" />
                 <span>+ Add Item</span>
               </button>
             </div>
 
-            {/* Scrollable table body only — keeps whole screen compact */}
-            <div className="max-h-[260px] md:max-h-[280px] overflow-y-auto">
+            {/* Scrollable table body only — sized to guarantee zero screen overflow */}
+            <div className="max-h-[160px] sm:max-h-[180px] lg:max-h-[220px] overflow-y-auto">
               <table className="w-full text-xs text-left">
-                <thead className="table-header sticky top-0 z-20 text-[11px]">
+                <thead className="table-header sticky top-0 z-20 text-[10.5px]">
                   <tr>
-                    <th className="py-1.5 px-2 text-center w-12">Photo</th>
-                    <th className="py-1.5 px-3">Product / Part Name *</th>
-                    <th className="py-1.5 px-2 text-center w-20">Qty</th>
-                    <th className="py-1.5 px-2 text-right w-28">Price (₹)</th>
-                    <th className="py-1.5 px-3 text-right w-28">Total (₹)</th>
-                    <th className="py-1.5 px-2 text-center w-10"></th>
+                    <th className="py-1 px-2 text-center w-10">Photo</th>
+                    <th className="py-1 px-2.5">Product / Part Name *</th>
+                    <th className="py-1 px-2 text-center w-16">Qty</th>
+                    <th className="py-1 px-2 text-right w-24">Price (₹)</th>
+                    <th className="py-1 px-2.5 text-right w-24">Total (₹)</th>
+                    <th className="py-1 px-1.5 text-center w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {items.map((item, idx) => (
                     <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
                       {/* Photo Thumbnail / Upload */}
-                      <td className="py-1 px-2 text-center align-middle">
+                      <td className="py-0.5 px-2 text-center align-middle">
                         <label className="cursor-pointer group relative inline-block">
                           {item.image_data ? (
                             <img
                               src={item.image_data}
                               alt="part"
-                              className="w-8 h-8 object-cover rounded border border-slate-300 shadow-2xs group-hover:opacity-75"
+                              className="w-7 h-7 object-cover rounded border border-slate-300 shadow-2xs group-hover:opacity-75"
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded border border-dashed border-slate-300 flex items-center justify-center text-slate-400 group-hover:text-blue-900 group-hover:border-blue-900 bg-slate-50">
-                              <Camera className="w-3.5 h-3.5" />
+                            <div className="w-7 h-7 rounded border border-dashed border-slate-300 flex items-center justify-center text-slate-400 group-hover:text-blue-900 group-hover:border-blue-900 bg-slate-50">
+                              <Camera className="w-3 h-3" />
                             </div>
                           )}
                           <input
@@ -642,7 +638,7 @@ export const B2BBillingScreen: React.FC = () => {
                       </td>
 
                       {/* Product Name with Typeahead, Voice Search and Dropdown Chevron to show all */}
-                      <td className="py-1 px-3">
+                      <td className="py-0.5 px-2.5">
                         <SearchableCombobox
                           value={item.product_name}
                           onChange={(val) => updateItemField(idx, 'product_name', val)}
@@ -653,12 +649,12 @@ export const B2BBillingScreen: React.FC = () => {
                           onVoiceClick={() => startVoiceProduct(idx)}
                           isListening={voiceItemIndex === idx}
                           placeholder="Type part name or click ▼ for all..."
-                          inputClassName="py-1 px-2 font-semibold"
+                          inputClassName="py-0.5 px-1.5 text-xs font-semibold"
                         />
                       </td>
 
                       {/* Quantity */}
-                      <td className="py-1 px-2">
+                      <td className="py-0.5 px-2">
                         <input
                           type="number"
                           min="1"
@@ -666,12 +662,12 @@ export const B2BBillingScreen: React.FC = () => {
                           onChange={(e) =>
                             updateItemField(idx, 'qty', parseInt(e.target.value, 10) || 1)
                           }
-                          className="input-field text-xs py-1 text-center font-bold font-mono"
+                          className="input-field text-xs py-0.5 text-center font-bold font-mono"
                         />
                       </td>
 
                       {/* Price */}
-                      <td className="py-1 px-2">
+                      <td className="py-0.5 px-2">
                         <input
                           type="number"
                           min="0"
@@ -680,24 +676,24 @@ export const B2BBillingScreen: React.FC = () => {
                           onChange={(e) =>
                             updateItemField(idx, 'price', parseFloat(e.target.value) || 0)
                           }
-                          className="input-field text-xs py-1 text-right font-bold font-mono"
+                          className="input-field text-xs py-0.5 text-right font-bold font-mono"
                         />
                       </td>
 
                       {/* Line Total */}
-                      <td className="py-1 px-3 text-right font-black text-slate-900 font-mono">
+                      <td className="py-0.5 px-2.5 text-right font-black text-slate-900 font-mono text-xs">
                         ₹{(item.total || 0).toFixed(2)}
                       </td>
 
                       {/* Remove Button */}
-                      <td className="py-1 px-2 text-center">
+                      <td className="py-0.5 px-1.5 text-center">
                         <button
                           type="button"
                           onClick={() => removeItem(idx)}
-                          className="p-1 text-slate-300 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
+                          className="p-1 text-slate-300 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors cursor-pointer"
                           title="Remove item"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </td>
                     </tr>
@@ -707,46 +703,46 @@ export const B2BBillingScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Row 3: Bottom Action & Totals Bar (Always Visible on Screen without Scrolling) */}
-          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-3">
+          {/* Row 3: Bottom Action & Totals Bar (Directly on screen with ZERO scroll!) */}
+          <div className="bg-white p-2 sm:p-2.5 rounded-lg border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-2">
             {/* Left: Optional Bill Remark */}
             <div className="flex-1 w-full sm:max-w-md">
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional remark (e.g. Parts given in exchange, warranty terms)..."
-                className="input-field text-xs py-1.5 px-2.5 font-medium"
+                placeholder="Optional remark (e.g. Parts given in exchange, warranty)..."
+                className="input-field text-xs py-1 px-2 font-medium"
               />
             </div>
 
-            {/* Right: Grand Total & Instant Save Button (Purely Saved in History, Zero Print Popup) */}
-            <div className="flex items-center gap-4 self-end sm:self-auto w-full sm:w-auto justify-between sm:justify-end">
-              <div className="flex items-baseline gap-2">
-                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Total:</span>
-                <span className="text-xl font-black text-slate-900 font-mono tracking-tight">
+            {/* Right: Grand Total & Instant Save Button */}
+            <div className="flex items-center gap-3 self-end sm:self-auto w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total:</span>
+                <span className="text-lg sm:text-xl font-black text-slate-900 font-mono tracking-tight">
                   {formatCurrency(grandTotal)}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleResetForm}
-                  className="btn-secondary text-xs px-2.5 py-2 text-slate-500 hover:text-slate-800"
+                  className="btn-secondary text-xs px-2.5 py-1.5 text-slate-500 hover:text-slate-800 cursor-pointer"
                   title="Clear inputs"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-3 h-3" />
                   <span className="hidden sm:inline">Clear</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleSaveBill}
-                  className="px-5 py-2 bg-[#0F2942] hover:bg-[#1e3a5f] text-white rounded text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                  className="px-4 py-1.5 bg-[#0F2942] hover:bg-[#1e3a5f] text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                   title="Save bill directly to history"
                 >
-                  <Save className="w-4 h-4" />
+                  <Save className="w-3.5 h-3.5" />
                   <span>Save Bill to History</span>
                 </button>
               </div>
