@@ -18,7 +18,10 @@ import {
   Lock,
   Eye,
   EyeOff,
-  KeyRound
+  KeyRound,
+  MessageCircle,
+  Monitor,
+  Globe
 } from 'lucide-react';
 
 export const SettingsManager: React.FC = () => {
@@ -27,6 +30,10 @@ export const SettingsManager: React.FC = () => {
 
   const [form, setForm] = useState<ShopSettings>({ ...settings });
   const [successMsg, setSuccessMsg] = useState<string>('');
+
+  // WhatsApp Templates Tab & Save Msg
+  const [activeWaTab, setActiveWaTab] = useState<'udhar' | 'bill' | 'service' | 'order'>('udhar');
+  const [waSaveMsg, setWaSaveMsg] = useState<string>('');
 
   // Super Admin Password Management States
   const [newPassword, setNewPassword] = useState<string>('');
@@ -71,6 +78,13 @@ export const SettingsManager: React.FC = () => {
     saveSettings(form);
     setSuccessMsg('Shop settings and profile updated successfully!');
     setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleSaveWhatsAppSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveSettings(form);
+    setWaSaveMsg('✓ WhatsApp message templates and dispatch mode updated successfully!');
+    setTimeout(() => setWaSaveMsg(''), 4500);
   };
 
   // Full JSON Backup Export
@@ -410,6 +424,353 @@ export const SettingsManager: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* WhatsApp Message Templates & Windows App Settings */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <MessageCircle className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">WhatsApp Message Templates &amp; Windows App Link</h3>
+              <p className="text-[11px] text-slate-500">
+                Configure default text templates and direct launch into the Windows Desktop application
+              </p>
+            </div>
+          </div>
+          {waSaveMsg && (
+            <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-300 px-3 py-1 rounded font-bold animate-pulse flex items-center gap-1.5">
+              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              <span>{waSaveMsg}</span>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSaveWhatsAppSettings} className="space-y-4 text-xs">
+          {/* Target App Protocol Selector */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+            <label className="block font-bold text-slate-800 text-xs">
+              Default WhatsApp Launch Target:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                className={`p-3 rounded-lg border cursor-pointer flex items-start gap-3 transition-all ${
+                  (form.whatsapp_target || 'desktop') === 'desktop'
+                    ? 'border-emerald-600 bg-emerald-50/50 shadow-2xs ring-1 ring-emerald-600'
+                    : 'border-slate-200 bg-white hover:bg-slate-100'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="whatsapp_target"
+                  checked={(form.whatsapp_target || 'desktop') === 'desktop'}
+                  onChange={() => handleChange('whatsapp_target', 'desktop')}
+                  className="mt-0.5"
+                />
+                <div>
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Monitor className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>WhatsApp Windows Desktop App (Recommended)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Directly launches the installed Windows application via <code className="font-mono text-emerald-800">whatsapp://</code>, bypassing the Chrome landing page.
+                  </p>
+                </div>
+              </label>
+
+              <label
+                className={`p-3 rounded-lg border cursor-pointer flex items-start gap-3 transition-all ${
+                  form.whatsapp_target === 'web'
+                    ? 'border-emerald-600 bg-emerald-50/50 shadow-2xs ring-1 ring-emerald-600'
+                    : 'border-slate-200 bg-white hover:bg-slate-100'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="whatsapp_target"
+                  checked={form.whatsapp_target === 'web'}
+                  onChange={() => handleChange('whatsapp_target', 'web')}
+                  className="mt-0.5"
+                />
+                <div>
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-blue-900" />
+                    <span>WhatsApp Web (Browser Tab)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Opens <code className="font-mono text-blue-900">web.whatsapp.com</code> in a new Chrome/Edge tab.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Template Section Tabs */}
+          <div className="space-y-3">
+            <div className="flex border-b border-slate-200 gap-1 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setActiveWaTab('udhar')}
+                className={`px-3 py-1.5 font-bold text-xs rounded-t-md transition-colors cursor-pointer ${
+                  activeWaTab === 'udhar'
+                    ? 'bg-[#0F2942] text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Udhar Khata Reminder
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveWaTab('bill')}
+                className={`px-3 py-1.5 font-bold text-xs rounded-t-md transition-colors cursor-pointer ${
+                  activeWaTab === 'bill'
+                    ? 'bg-[#0F2942] text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Invoice / Bill Summary
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveWaTab('service')}
+                className={`px-3 py-1.5 font-bold text-xs rounded-t-md transition-colors cursor-pointer ${
+                  activeWaTab === 'service'
+                    ? 'bg-[#0F2942] text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Services Status Update
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveWaTab('order')}
+                className={`px-3 py-1.5 font-bold text-xs rounded-t-md transition-colors cursor-pointer ${
+                  activeWaTab === 'order'
+                    ? 'bg-[#0F2942] text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Dealer Wholesale Order
+              </button>
+            </div>
+
+            {/* Udhar Khata Reminder Templates */}
+            {activeWaTab === 'udhar' && (
+              <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <div className="text-[11px] text-slate-500 bg-blue-50/70 p-2 rounded border border-blue-200">
+                  Available tags: <code className="font-mono text-blue-900 font-bold">{'{customer_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{dues_amount}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{shop_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{mobiles}'}</code>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      मराठी (Marathi Template):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={form.msg_template_udhar_mr || ''}
+                      onChange={(e) => handleChange('msg_template_udhar_mr', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      हिंदी (Hindi Template):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={form.msg_template_udhar_hi || ''}
+                      onChange={(e) => handleChange('msg_template_udhar_hi', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      English (English Template):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={form.msg_template_udhar_en || ''}
+                      onChange={(e) => handleChange('msg_template_udhar_en', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bill Summary Templates */}
+            {activeWaTab === 'bill' && (
+              <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <div className="text-[11px] text-slate-500 bg-blue-50/70 p-2 rounded border border-blue-200">
+                  Available tags: <code className="font-mono text-blue-900 font-bold">{'{invoice_num}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{invoice_date}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{customer_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{appliance_line}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{items_list}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{grand_total}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{paid_amount}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{due_amount}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{shop_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{mobiles}'}</code>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      मराठी (Marathi Template):
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={form.msg_template_bill_mr || ''}
+                      onChange={(e) => handleChange('msg_template_bill_mr', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      हिंदी (Hindi Template):
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={form.msg_template_bill_hi || ''}
+                      onChange={(e) => handleChange('msg_template_bill_hi', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      English (English Template):
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={form.msg_template_bill_en || ''}
+                      onChange={(e) => handleChange('msg_template_bill_en', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Service Status Templates */}
+            {activeWaTab === 'service' && (
+              <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <div className="text-[11px] text-slate-500 bg-blue-50/70 p-2 rounded border border-blue-200">
+                  Available tags: <code className="font-mono text-blue-900 font-bold">{'{service_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{service_date}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{service_desc_line}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{price}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{status}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{technician_line}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{notes_line}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{customer_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{shop_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{mobiles}'}</code>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      मराठी (Marathi Template):
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={form.msg_template_service_mr || ''}
+                      onChange={(e) => handleChange('msg_template_service_mr', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      हिंदी (Hindi Template):
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={form.msg_template_service_hi || ''}
+                      onChange={(e) => handleChange('msg_template_service_hi', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      English (English Template):
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={form.msg_template_service_en || ''}
+                      onChange={(e) => handleChange('msg_template_service_en', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Wholesale Dealer Order Templates */}
+            {activeWaTab === 'order' && (
+              <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <div className="text-[11px] text-slate-500 bg-blue-50/70 p-2 rounded border border-blue-200">
+                  Available tags: <code className="font-mono text-blue-900 font-bold">{'{shop_name}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{date}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{mobiles}'}</code>,{' '}
+                  <code className="font-mono text-blue-900 font-bold">{'{content}'}</code>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      मराठी (Marathi Template):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={form.msg_template_order_mr || ''}
+                      onChange={(e) => handleChange('msg_template_order_mr', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      हिंदी (Hindi Template):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={form.msg_template_order_hi || ''}
+                      onChange={(e) => handleChange('msg_template_order_hi', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      English (English Template):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={form.msg_template_order_en || ''}
+                      onChange={(e) => handleChange('msg_template_order_en', e.target.value)}
+                      className="input-field font-sans text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              className="btn-primary text-xs px-4 py-2 bg-emerald-700 hover:bg-emerald-800 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save WhatsApp Templates &amp; Target Mode</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Backup & Data Management */}

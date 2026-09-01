@@ -3,6 +3,8 @@ import { useDb } from '../../context/DbContext';
 import { Customer, Product, ServiceRecord, ServiceStatus } from '../../types';
 import { formatDate, formatDateInput, formatCurrency } from '../../utils/formatters';
 import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
+import { WhatsAppModal } from '../common/WhatsAppModal';
+import { interpolateTemplate } from '../../utils/whatsapp';
 import {
   Wrench,
   Plus,
@@ -49,6 +51,12 @@ export const ServicesManager: React.FC = () => {
   // Autocomplete States
   // WhatsApp Language Preference
   const [waLanguage, setWaLanguage] = useState<'mr' | 'hi' | 'en'>('mr');
+  const [waModalData, setWaModalData] = useState<{
+    isOpen: boolean;
+    name: string;
+    phone: string;
+    message: string;
+  } | null>(null);
 
   // Voice Search for Service Modal
   const [isListeningCust, setIsListeningCust] = useState<boolean>(false);
@@ -217,7 +225,7 @@ export const ServicesManager: React.FC = () => {
     });
   };
 
-  // WhatsApp Message Generator
+  // WhatsApp Message Generator using configurable templates from Settings
   const buildServiceWhatsAppMessage = (r: ServiceRecord, lang: 'mr' | 'hi' | 'en'): string => {
     const statusText = {
       mr: {
@@ -237,66 +245,39 @@ export const ServicesManager: React.FC = () => {
       }
     };
 
+    let template = settings.msg_template_service_en || '';
     if (lang === 'mr') {
-      return (
-        `*${settings.shop_name}*\n` +
-        `मोबाईल: ${settings.mobiles}\n\n` +
-        `नमस्कार ${r.customer_name} जी,\n\n` +
-        `आपल्या *${r.service_name}* सर्व्हिस कामाची माहिती खालीलप्रमाणे आहे:\n` +
-        `------------------------\n` +
-        `तारीख: *${formatDate(r.service_date)}*\n` +
-        `सेवा: *${r.service_name}*\n` +
-        (r.service_description ? `तपशील: ${r.service_description}\n` : '') +
-        `सेवा शुल्क (Price): *₹${r.price.toFixed(2)}*\n` +
-        `सद्यस्थिती (Status): *${statusText.mr[r.status]}*\n` +
-        (r.assigned_worker_name ? `तंत्रज्ञ (Technician): ${r.assigned_worker_name}\n` : '') +
-        (r.notes ? `शेरा (Note): ${r.notes}\n` : '') +
-        `------------------------\n` +
-        `काही अडचण असल्यास कृपया संपर्क साधावा.\n\nधन्यवाद!\n*स्टार लाईन सर्व्हिसेस, सोलापूर*`
-      );
+      template = settings.msg_template_service_mr || template;
     } else if (lang === 'hi') {
-      return (
-        `*${settings.shop_name}*\n` +
-        `संपर्क: ${settings.mobiles}\n\n` +
-        `नमस्ते ${r.customer_name} जी,\n\n` +
-        `आपकी *${r.service_name}* सर्विस कार्य का विवरण:\n` +
-        `------------------------\n` +
-        `दिनांक: *${formatDate(r.service_date)}*\n` +
-        `सेवा: *${r.service_name}*\n` +
-        (r.service_description ? `विवरण: ${r.service_description}\n` : '') +
-        `सेवा शुल्क: *₹${r.price.toFixed(2)}*\n` +
-        `कार्य स्थिति: *${statusText.hi[r.status]}*\n` +
-        (r.assigned_worker_name ? `तकनीशियन: ${r.assigned_worker_name}\n` : '') +
-        (r.notes ? `टिप्पणी: ${r.notes}\n` : '') +
-        `------------------------\n` +
-        `स्टार लाइन सर्विसेज में सेवा का अवसर देने हेतु धन्यवाद!`
-      );
-    } else {
-      return (
-        `*${settings.shop_name}*\n` +
-        `Contact: ${settings.mobiles}\n\n` +
-        `Dear ${r.customer_name},\n\n` +
-        `Here is the service status update for *${r.service_name}*:\n` +
-        `------------------------\n` +
-        `Date: *${formatDate(r.service_date)}*\n` +
-        `Service: *${r.service_name}*\n` +
-        (r.service_description ? `Details: ${r.service_description}\n` : '') +
-        `Price: *₹${r.price.toFixed(2)}*\n` +
-        `Status: *${statusText.en[r.status]}*\n` +
-        (r.assigned_worker_name ? `Assigned Tech: ${r.assigned_worker_name}\n` : '') +
-        (r.notes ? `Note: ${r.notes}\n` : '') +
-        `------------------------\n` +
-        `Thank you for choosing Star Line Services!`
-      );
+      template = settings.msg_template_service_hi || template;
     }
+
+    const serviceDescLine = r.service_description ? `तपशील / Details: ${r.service_description}\n` : '';
+    const technicianLine = r.assigned_worker_name ? `तंत्रज्ञ / Technician: ${r.assigned_worker_name}\n` : '';
+    const notesLine = r.notes ? `शेरा / Note: ${r.notes}\n` : '';
+
+    return interpolateTemplate(template, {
+      shop_name: settings.shop_name,
+      mobiles: settings.mobiles,
+      customer_name: r.customer_name,
+      service_date: formatDate(r.service_date),
+      service_name: r.service_name,
+      service_desc_line: serviceDescLine,
+      price: r.price.toFixed(2),
+      status: statusText[lang][r.status],
+      technician_line: technicianLine,
+      notes_line: notesLine
+    });
   };
 
   const handleSendWhatsApp = (r: ServiceRecord) => {
-    const cleanMobile = r.customer_mobile.replace(/\D/g, '');
-    const mobileWithCode = cleanMobile.length === 10 ? `91${cleanMobile}` : cleanMobile;
-    const msg = encodeURIComponent(buildServiceWhatsAppMessage(r, waLanguage));
-    const url = `https://wa.me/${mobileWithCode}?text=${msg}`;
-    window.open(url, '_blank');
+    const msg = buildServiceWhatsAppMessage(r, waLanguage);
+    setWaModalData({
+      isOpen: true,
+      name: r.customer_name,
+      phone: r.customer_mobile,
+      message: msg
+    });
   };
 
   // Filtered List
@@ -716,6 +697,19 @@ export const ServicesManager: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Editable WhatsApp Service Dispatch Modal */}
+      {waModalData && (
+        <WhatsAppModal
+          isOpen={waModalData.isOpen}
+          onClose={() => setWaModalData(null)}
+          recipientName={waModalData.name}
+          recipientPhone={waModalData.phone}
+          initialMessage={waModalData.message}
+          defaultTarget={settings.whatsapp_target || 'desktop'}
+          title="Send Service Update via WhatsApp"
+        />
       )}
     </div>
   );

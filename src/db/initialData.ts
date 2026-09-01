@@ -34,7 +34,32 @@ export const INITIAL_SETTINGS: ShopSettings = {
       created_at: new Date().toISOString()
     }
   ],
-  super_admin_password: '123456'
+  super_admin_password: '123456',
+  whatsapp_target: 'desktop',
+  msg_template_udhar_mr:
+    'नमस्कार {customer_name} जी,\n\n*{shop_name}, सोलापूर* कडून स्मरणपत्र:\nआपल्या खात्यावरील एकूण बाकी रक्कम *₹{dues_amount}* आहे.\n\nकृपया सदर बाकी रक्कम लवकरात लवकर जमा करावी ही नम्र विनंती.\nसंपर्क: {mobiles}\n\nधन्यवाद!',
+  msg_template_udhar_hi:
+    'नमस्ते {customer_name} जी,\n\n*{shop_name}, सोलापुर* की ओर से रिमाइंडर:\nआपके खाते पर कुल बकाया राशि *₹{dues_amount}* है।\n\nकृपया यह बकाया राशि शीघ्र जमा करने का कष्ट करें।\nसंपर्क: {mobiles}\n\nधन्यवाद!',
+  msg_template_udhar_en:
+    'Dear {customer_name},\n\nThis is a friendly payment reminder from *{shop_name}, Solapur*.\nYour outstanding dues balance is *₹{dues_amount}*.\n\nPlease clear the balance at your earliest convenience.\nContact: {mobiles}\n\nThank you!',
+  msg_template_bill_mr:
+    '*{shop_name}*\nदुकान क्र. ३, अन्वर इस्टेट, दक्षिण सदर बाजार, सोलापूर\nमोबाईल: {mobiles}\n\n*बिल / पावती तपशील*\nबिल क्र.: *#{invoice_num}*\nदिनांक: {invoice_date}\nग्राहक: {customer_name}\n{appliance_line}------------------------\n*सुटे भाग तपशील:*\n{items_list}\n------------------------\n*एकूण रक्कम (Grand Total): ₹{grand_total}*\nजमा रक्कम (Paid): ₹{paid_amount}\n*बाकी रक्कम (Dues): ₹{due_amount}*\n\nस्टार लाईन सर्व्हिसेस निवडल्याबद्दल धन्यवाद!',
+  msg_template_bill_hi:
+    '*{shop_name}*\nदुकान क्र. ३, अनवर एस्टेट, दक्षिण सदर बाजार, सोलापुर\nसंपर्क: {mobiles}\n\n*बिल / रसीद विवरण*\nबिल क्र.: *#{invoice_num}*\nदिनांक: {invoice_date}\nग्राहक: {customer_name}\n{appliance_line}------------------------\n*स्पेयर पार्ट्स विवरण:*\n{items_list}\n------------------------\n*कुल राशि: ₹{grand_total}*\nप्राप्त राशि: ₹{paid_amount}\n*बकाया राशि: ₹{due_amount}*\n\nस्टार लाइन सर्विसेज में सेवा का अवसर देने हेतु धन्यवाद!',
+  msg_template_bill_en:
+    '*{shop_name}*\nShop No. 3, Anvar Estate, South Sadar Bazar, Solapur\nContact: {mobiles}\n\n*INVOICE / RECEIPT SUMMARY*\nInvoice #: *#{invoice_num}*\nDate: {invoice_date}\nCustomer: {customer_name}\n{appliance_line}------------------------\n*Items Replaced:*\n{items_list}\n------------------------\n*Grand Total: ₹{grand_total}*\nAmount Paid: ₹{paid_amount}\n*Outstanding Dues: ₹{due_amount}*\n\nThank you for choosing Star Line Services!',
+  msg_template_service_mr:
+    '*{shop_name}*\nमोबाईल: {mobiles}\n\nनमस्कार {customer_name} जी,\n\nआपल्या *{service_name}* सर्व्हिस कामाची माहिती खालीलप्रमाणे आहे:\n------------------------\nतारीख: *{service_date}*\nसेवा: *{service_name}*\n{service_desc_line}सेवा शुल्क (Price): *₹{price}*\nसद्यस्थिती (Status): *{status}*\n{technician_line}{notes_line}------------------------\nकाही अडचण असल्यास कृपया संपर्क साधावा.\n\nधन्यवाद!\n*स्टार लाईन सर्व्हिसेस, सोलापूर*',
+  msg_template_service_hi:
+    '*{shop_name}*\nसंपर्क: {mobiles}\n\nनमस्ते {customer_name} जी,\n\nआपकी *{service_name}* सर्विस कार्य का विवरण:\n------------------------\nदिनांक: *{service_date}*\nसेवा: *{service_name}*\n{service_desc_line}सेवा शुल्क: *₹{price}*\nकार्य स्थिति: *{status}*\n{technician_line}{notes_line}------------------------\nस्टार लाइन सर्विसेज में सेवा का अवसर देने हेतु धन्यवाद!',
+  msg_template_service_en:
+    '*{shop_name}*\nContact: {mobiles}\n\nDear {customer_name},\n\nHere is the service status update for *{service_name}*:\n------------------------\nDate: *{service_date}*\nService: *{service_name}*\n{service_desc_line}Price: *₹{price}*\nStatus: *{status}*\n{technician_line}{notes_line}------------------------\nThank you for choosing Star Line Services!',
+  msg_template_order_mr:
+    '*{shop_name}, सोलापूर*\nदिनांक: {date}\nसंपर्क: {mobiles}\n\nनमस्कार,\nआम्हाला खालील सुटे भाग / साहित्य ऑर्डर करायचे आहे. कृपया दर व उपलब्धता कळवावी:\n------------------------------------\n{content}\n------------------------------------\nकृपया लवकरात लवकर पाठवून द्यावे. धन्यवाद!',
+  msg_template_order_hi:
+    '*{shop_name}, सोलापुर*\nदिनांक: {date}\nसंपर्क: {mobiles}\n\nनमस्ते,\nहमें निम्नलिखित स्पेयर पार्ट्स / सामग्री ऑर्डर करनी है। कृपया दर व उपलब्धता बताएं:\n------------------------------------\n{content}\n------------------------------------\nकृपया जल्द से जल्द भिजवाने की कृपा करें। धन्यवाद!',
+  msg_template_order_en:
+    '*{shop_name}, Solapur*\nDate: {date}\nContact: {mobiles}\n\nHello,\nWe would like to place a purchase order for the following spares/items. Please confirm rates & availability:\n------------------------------------\n{content}\n------------------------------------\nThank you!'
 };
 
 export const INITIAL_USERS: User[] = [

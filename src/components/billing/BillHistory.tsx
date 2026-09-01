@@ -5,6 +5,8 @@ import { Bill } from '../../types';
 import { formatDate } from '../../utils/formatters';
 import { BillPrintTemplate } from './BillPrintTemplate';
 import { JobStatusBadge } from './JobStatusBadge';
+import { WhatsAppModal } from '../common/WhatsAppModal';
+import { interpolateTemplate } from '../../utils/whatsapp';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
@@ -30,6 +32,12 @@ export const BillHistory: React.FC = () => {
   const [filterPayment, setFilterPayment] = useState<string>('ALL');
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [waModalData, setWaModalData] = useState<{
+    isOpen: boolean;
+    name: string;
+    phone: string;
+    message: string;
+  } | null>(null);
   const [waLanguage, setWaLanguage] = useState<'mr' | 'hi' | 'en'>('mr');
 
   // Filter bills
@@ -90,7 +98,7 @@ export const BillHistory: React.FC = () => {
     }
   };
 
-  // Build WhatsApp Message
+  // Build WhatsApp Message using configurable templates from Settings
   const buildBillWhatsAppMessage = (bill: Bill, lang: 'mr' | 'hi' | 'en'): string => {
     const itemsList = bill.items
       .map(
@@ -99,73 +107,40 @@ export const BillHistory: React.FC = () => {
       )
       .join('\n');
 
+    let template = settings.msg_template_bill_en || '';
     if (lang === 'mr') {
-      return (
-        `*${settings.shop_name}*\n` +
-        `दुकान क्र. ३, अन्वर इस्टेट, दक्षिण सदर बाजार, लस्कर, सोलापूर\n` +
-        `मोबाईल: ${settings.mobiles}\n\n` +
-        `*बिल / पावती तपशील*\n` +
-        `बिल क्र.: *#${bill.invoice_num}*\n` +
-        `दिनांक: ${formatDate(bill.invoice_date)}\n` +
-        `ग्राहक नाव: ${bill.customer_name}\n` +
-        (bill.product_name_desc ? `उपकरण: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
-        `------------------------\n` +
-        `*बदललेले सुटे भाग:*\n` +
-        `${itemsList}\n` +
-        `------------------------\n` +
-        `*एकूण रक्कम (Total): ₹${bill.grand_total.toFixed(2)}*\n` +
-        `जमा रक्कम (Paid): ₹${bill.paid_amount.toFixed(2)}\n` +
-        (bill.due_amount > 0 ? `*बाकी रक्कम (Dues): ₹${bill.due_amount.toFixed(2)}*\n` : `बाकी: ₹0.00 (पूर्ण भरणा)\n`) +
-        `\nस्टार लाईन सर्व्हिसेस निवडल्याबद्दल धन्यवाद!`
-      );
+      template = settings.msg_template_bill_mr || template;
     } else if (lang === 'hi') {
-      return (
-        `*${settings.shop_name}*\n` +
-        `दुकान क्र. ३, अनवर एस्टेट, दक्षिण सदर बाजार, लस्कर, सोलापुर\n` +
-        `संपर्क: ${settings.mobiles}\n\n` +
-        `*बिल / रसीद विवरण*\n` +
-        `बिल क्र.: *#${bill.invoice_num}*\n` +
-        `दिनांक: ${formatDate(bill.invoice_date)}\n` +
-        `ग्राहक का नाम: ${bill.customer_name}\n` +
-        (bill.product_name_desc ? `उपकरण: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
-        `------------------------\n` +
-        `*बदले गए स्पेयर पार्ट्स:*\n` +
-        `${itemsList}\n` +
-        `------------------------\n` +
-        `*कुल राशि (Total): ₹${bill.grand_total.toFixed(2)}*\n` +
-        `प्राप्त राशि (Paid): ₹${bill.paid_amount.toFixed(2)}\n` +
-        (bill.due_amount > 0 ? `*बकाया राशि (Dues): ₹${bill.due_amount.toFixed(2)}*\n` : `बकाया: ₹0.00 (पूर्ण भुगतान)\n`) +
-        `\nस्टार लाइन सर्विसेज में सेवा का अवसर देने के लिए धन्यवाद!`
-      );
-    } else {
-      return (
-        `*${settings.shop_name}*\n` +
-        `Shop No. 3, Anvar Estate, South Sadar Bazar, Solapur\n` +
-        `Contact: ${settings.mobiles}\n\n` +
-        `*INVOICE / RECEIPT SUMMARY*\n` +
-        `Invoice #: *#${bill.invoice_num}*\n` +
-        `Date: ${formatDate(bill.invoice_date)}\n` +
-        `Customer: ${bill.customer_name}\n` +
-        (bill.product_name_desc ? `Appliance: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
-        `------------------------\n` +
-        `*Items Replaced:*\n` +
-        `${itemsList}\n` +
-        `------------------------\n` +
-        `*Grand Total: ₹${bill.grand_total.toFixed(2)}*\n` +
-        `Amount Paid: ₹${bill.paid_amount.toFixed(2)}\n` +
-        (bill.due_amount > 0 ? `*Outstanding Dues: ₹${bill.due_amount.toFixed(2)}*\n` : `Dues: ₹0.00 (Fully Settled)\n`) +
-        `\nThank you for choosing Star Line Services!`
-      );
+      template = settings.msg_template_bill_hi || template;
     }
+
+    const applianceLine = bill.product_name_desc
+      ? `उपकरण / Appliance: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n`
+      : '';
+
+    return interpolateTemplate(template, {
+      shop_name: settings.shop_name,
+      mobiles: settings.mobiles,
+      invoice_num: bill.invoice_num,
+      invoice_date: formatDate(bill.invoice_date),
+      customer_name: bill.customer_name,
+      appliance_line: applianceLine,
+      items_list: itemsList,
+      grand_total: bill.grand_total.toFixed(2),
+      paid_amount: bill.paid_amount.toFixed(2),
+      due_amount: bill.due_amount.toFixed(2)
+    });
   };
 
   const handleSendWhatsApp = () => {
     if (!selectedBill) return;
-    const cleanMobile = selectedBill.customer_mobile.replace(/\D/g, '');
-    const mobileWithCode = cleanMobile.length === 10 ? `91${cleanMobile}` : cleanMobile;
-    const msg = encodeURIComponent(buildBillWhatsAppMessage(selectedBill, waLanguage));
-    const url = `https://wa.me/${mobileWithCode}?text=${msg}`;
-    window.open(url, '_blank');
+    const msg = buildBillWhatsAppMessage(selectedBill, waLanguage);
+    setWaModalData({
+      isOpen: true,
+      name: selectedBill.customer_name,
+      phone: selectedBill.customer_mobile,
+      message: msg
+    });
   };
 
   return (
@@ -483,6 +458,19 @@ export const BillHistory: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Editable WhatsApp Dispatch Modal */}
+      {waModalData && (
+        <WhatsAppModal
+          isOpen={waModalData.isOpen}
+          onClose={() => setWaModalData(null)}
+          recipientName={waModalData.name}
+          recipientPhone={waModalData.phone}
+          initialMessage={waModalData.message}
+          defaultTarget={settings.whatsapp_target || 'desktop'}
+          title="Send Invoice Summary via WhatsApp"
+        />
       )}
     </div>
   );

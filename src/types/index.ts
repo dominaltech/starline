@@ -164,6 +164,19 @@ export interface ShopSettings {
   default_conditions: string;
   dealers: DealerContact[];
   super_admin_password?: string;
+  whatsapp_target?: 'desktop' | 'web';
+  msg_template_udhar_mr?: string;
+  msg_template_udhar_hi?: string;
+  msg_template_udhar_en?: string;
+  msg_template_bill_mr?: string;
+  msg_template_bill_hi?: string;
+  msg_template_bill_en?: string;
+  msg_template_service_mr?: string;
+  msg_template_service_hi?: string;
+  msg_template_service_en?: string;
+  msg_template_order_mr?: string;
+  msg_template_order_hi?: string;
+  msg_template_order_en?: string;
 }
 
 export interface DealerContact {

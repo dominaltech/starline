@@ -193,7 +193,20 @@ class StorageEngine {
       ...INITIAL_SETTINGS,
       ...raw,
       dealers: Array.isArray(raw?.dealers) ? raw.dealers : (INITIAL_SETTINGS.dealers || []),
-      super_admin_password: raw?.super_admin_password || INITIAL_SETTINGS.super_admin_password || '123456'
+      super_admin_password: raw?.super_admin_password || INITIAL_SETTINGS.super_admin_password || '123456',
+      whatsapp_target: raw?.whatsapp_target || INITIAL_SETTINGS.whatsapp_target || 'desktop',
+      msg_template_udhar_mr: raw?.msg_template_udhar_mr || INITIAL_SETTINGS.msg_template_udhar_mr,
+      msg_template_udhar_hi: raw?.msg_template_udhar_hi || INITIAL_SETTINGS.msg_template_udhar_hi,
+      msg_template_udhar_en: raw?.msg_template_udhar_en || INITIAL_SETTINGS.msg_template_udhar_en,
+      msg_template_bill_mr: raw?.msg_template_bill_mr || INITIAL_SETTINGS.msg_template_bill_mr,
+      msg_template_bill_hi: raw?.msg_template_bill_hi || INITIAL_SETTINGS.msg_template_bill_hi,
+      msg_template_bill_en: raw?.msg_template_bill_en || INITIAL_SETTINGS.msg_template_bill_en,
+      msg_template_service_mr: raw?.msg_template_service_mr || INITIAL_SETTINGS.msg_template_service_mr,
+      msg_template_service_hi: raw?.msg_template_service_hi || INITIAL_SETTINGS.msg_template_service_hi,
+      msg_template_service_en: raw?.msg_template_service_en || INITIAL_SETTINGS.msg_template_service_en,
+      msg_template_order_mr: raw?.msg_template_order_mr || INITIAL_SETTINGS.msg_template_order_mr,
+      msg_template_order_hi: raw?.msg_template_order_hi || INITIAL_SETTINGS.msg_template_order_hi,
+      msg_template_order_en: raw?.msg_template_order_en || INITIAL_SETTINGS.msg_template_order_en
     };
   }
 

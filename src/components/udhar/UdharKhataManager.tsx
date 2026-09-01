@@ -4,6 +4,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { Customer } from '../../types';
 import { formatCurrency, formatDate, formatDateInput } from '../../utils/formatters';
 import { CustomerDetailModal } from '../customers/CustomerDetailModal';
+import { WhatsAppModal } from '../common/WhatsAppModal';
+import { interpolateTemplate } from '../../utils/whatsapp';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
@@ -41,6 +43,12 @@ export const UdharKhataManager: React.FC = () => {
   const [payingCustomer, setPayingCustomer] = useState<Customer | null>(null);
   const [editingFollowUpCustomer, setEditingFollowUpCustomer] = useState<Customer | null>(null);
   const [showAddUdharModal, setShowAddUdharModal] = useState<boolean>(false);
+  const [waModalData, setWaModalData] = useState<{
+    isOpen: boolean;
+    name: string;
+    phone: string;
+    message: string;
+  } | null>(null);
 
   // Vasuli Form States
   const [vasuliAmount, setVasuliAmount] = useState<string>('');
@@ -187,22 +195,28 @@ export const UdharKhataManager: React.FC = () => {
     setNewUdharRemarks('');
   };
 
-  // WhatsApp Reminder Generator
+  // WhatsApp Reminder Generator (Editable Modal with Windows App & Web Protocol Support)
   const sendWhatsAppReminder = (cust: Customer) => {
-    const cleanMobile = cust.mobile.replace(/\D/g, '');
-    const mobileWithCode = cleanMobile.length === 10 ? `91${cleanMobile}` : cleanMobile;
-
-    let message = '';
+    let template = settings.msg_template_udhar_en || '';
     if (language === 'mr') {
-      message = `नमस्कार ${cust.name} जी,\n\n*${settings.shop_name}, सोलापूर* कडून स्मरणपत्र:\nआपल्या खात्यावरील एकूण बाकी रक्कम *₹${cust.dues_balance.toFixed(2)}* आहे.\n\nकृपया सदर बाकी रक्कम लवकरात लवकर जमा करावी ही नम्र विनंती.\nसंपर्क: ${settings.mobiles}\n\nधन्यवाद!`;
+      template = settings.msg_template_udhar_mr || template;
     } else if (language === 'hi') {
-      message = `नमस्ते ${cust.name} जी,\n\n*${settings.shop_name}, सोलापुर* की ओर से रिमाइंडर:\nआपके खाते पर कुल बकाया राशि *₹${cust.dues_balance.toFixed(2)}* है।\n\nकृपया यह बकाया राशि शीघ्र जमा करने का कष्ट करें।\nसंपर्क: ${settings.mobiles}\n\nधन्यवाद!`;
-    } else {
-      message = `Dear ${cust.name},\n\nThis is a friendly payment reminder from *${settings.shop_name}, Solapur*.\nYour outstanding dues balance is *₹${cust.dues_balance.toFixed(2)}*.\n\nPlease clear the balance at your earliest convenience.\nContact: ${settings.mobiles}\n\nThank you!`;
+      template = settings.msg_template_udhar_hi || template;
     }
 
-    const url = `https://wa.me/${mobileWithCode}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+    const message = interpolateTemplate(template, {
+      customer_name: cust.name,
+      dues_amount: cust.dues_balance.toFixed(2),
+      shop_name: settings.shop_name,
+      mobiles: settings.mobiles
+    });
+
+    setWaModalData({
+      isOpen: true,
+      name: cust.name,
+      phone: cust.mobile,
+      message
+    });
   };
 
   // Export PDF
@@ -237,207 +251,155 @@ export const UdharKhataManager: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
-      {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-lg border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-lg bg-red-600 text-white flex items-center justify-center shadow-xs">
-            <Wallet className="w-6 h-6" />
+    <div className="max-w-7xl mx-auto space-y-3 pb-12">
+      {/* Front Section: Compact Top Header with Integrated Horizontal KPI Ribbon */}
+      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-2.5">
+        {/* Left: Title & Live Outstanding Badge */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 leading-tight">{t('udhar_title')}</h2>
+              <p className="text-[11px] text-slate-500">Customer dues ledger &amp; vasuli tracking</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">{t('udhar_title')}</h2>
-            <p className="text-xs text-slate-500">Track pending customer dues, record vasuli, and send WhatsApp reminders</p>
+
+          {/* Horizontal KPI Ribbon */}
+          <div className="flex items-center gap-2 flex-wrap pl-0 md:pl-2.5 md:border-l md:border-slate-200">
+            <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 px-2.5 py-1 rounded-md">
+              <span className="text-[10px] font-bold text-red-700 uppercase">Outstanding:</span>
+              <span className="text-sm font-black text-red-700 font-mono">{formatCurrency(totalOutstanding)}</span>
+            </div>
+
+            <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-1 rounded-md text-[11px] font-semibold text-slate-700">
+              <span>Active:</span>
+              <strong className="text-slate-900">{activeUdharCustomers.length}</strong>
+            </div>
+
+            <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md text-[11px] font-semibold text-amber-800">
+              <span>Overdue:</span>
+              <strong className="text-amber-900">{overdueCustomers.length}</strong>
+            </div>
+
+            <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md text-[11px] font-semibold text-emerald-800">
+              <span>Settled:</span>
+              <strong className="text-emerald-900">{customers.filter(c => c.dues_balance === 0).length}</strong>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
+        {/* Right: Add Udhar Button & Export Options */}
+        <div className="flex items-center gap-2 self-end md:self-auto">
           <button
+            type="button"
             onClick={() => setShowAddUdharModal(true)}
-            className="btn-primary text-xs px-3.5 py-2 flex-1 sm:flex-none justify-center bg-red-600 hover:bg-red-700 text-white border-red-700"
+            className="btn-primary text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             <span>{t('udhar_add_credit')}</span>
           </button>
 
           <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
             <button
+              type="button"
               onClick={handleExportImage}
-              className="p-2 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
+              className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
               title="Export as Image"
             >
-              <ImageIcon className="w-4 h-4" />
+              <ImageIcon className="w-3.5 h-3.5" />
             </button>
             <button
+              type="button"
               onClick={handleExportPdf}
-              className="p-2 rounded bg-[#0F2942] hover:bg-[#1e3a5f] text-white"
+              className="p-1.5 rounded bg-[#0F2942] hover:bg-[#1e3a5f] text-white cursor-pointer"
               title="Export as PDF"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Outstanding */}
-        <div className="bg-white p-5 rounded-lg border border-red-200 shadow-xs relative overflow-hidden bg-gradient-to-br from-white to-red-50/40">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-semibold text-red-700 uppercase tracking-wide">
-                {t('udhar_total_outstanding')}
-              </span>
-              <div className="text-2xl font-black text-red-700 mt-1 font-mono">
-                {formatCurrency(totalOutstanding)}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-red-100 text-red-700 flex items-center justify-center">
-              <IndianRupee className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-red-600 font-medium flex items-center gap-1">
-            <AlertCircle className="w-3.5 h-3.5" />
-            <span>{activeUdharCustomers.length} active credit accounts</span>
-          </div>
+      {/* Front Section: Compact Search & Filter Bar */}
+      <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2">
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder={t('udhar_search_placeholder')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="input-field pr-8 text-xs py-1 font-medium"
+          />
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2" />
         </div>
 
-        {/* Total Customers with Dues */}
-        <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                {t('udhar_customers_count')}
-              </span>
-              <div className="text-2xl font-black text-slate-900 mt-1">
-                {activeUdharCustomers.length}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-slate-500">
-            Out of {customers.length} total customers
-          </div>
-        </div>
-
-        {/* Pending Follow-ups */}
-        <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                {t('udhar_pending_followups')}
-              </span>
-              <div className="text-2xl font-black text-amber-800 mt-1">
-                {overdueCustomers.length}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-amber-700 font-semibold">
-            Due today or overdue for call/visit
-          </div>
-        </div>
-
-        {/* Settled Accounts */}
-        <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Settled Accounts (₹0)
-              </span>
-              <div className="text-2xl font-black text-emerald-800 mt-1">
-                {customers.filter(c => c.dues_balance === 0).length}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-emerald-700 font-semibold">
-            Fully paid & up to date
-          </div>
+        {/* Filter Pills */}
+        <div className="flex bg-slate-100 p-0.5 rounded-md text-xs font-semibold text-slate-700 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setFilterType('ACTIVE')}
+            className={`px-2.5 py-1 rounded text-xs transition-all whitespace-nowrap cursor-pointer ${
+              filterType === 'ACTIVE'
+                ? 'bg-red-600 text-white shadow-xs'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            {t('udhar_filter_active')} ({activeUdharCustomers.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterType('OVERDUE')}
+            className={`px-2.5 py-1 rounded text-xs transition-all whitespace-nowrap cursor-pointer ${
+              filterType === 'OVERDUE'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            {t('udhar_filter_overdue')} ({overdueCustomers.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterType('ALL')}
+            className={`px-2.5 py-1 rounded text-xs transition-all whitespace-nowrap cursor-pointer ${
+              filterType === 'ALL'
+                ? 'bg-[#0F2942] text-white shadow-xs'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            {t('udhar_filter_all')} ({customers.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterType('SETTLED')}
+            className={`px-2.5 py-1 rounded text-xs transition-all whitespace-nowrap cursor-pointer ${
+              filterType === 'SETTLED'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            {t('udhar_filter_settled')}
+          </button>
         </div>
       </div>
 
-      {/* Filter Tabs & Search Bar */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-3">
-        <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder={t('udhar_search_placeholder')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-field pr-9 font-medium"
-            />
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-          </div>
-
-          {/* Filter Pills */}
-          <div className="flex bg-slate-100 p-1 rounded-md text-xs font-semibold text-slate-700 overflow-x-auto">
-            <button
-              onClick={() => setFilterType('ACTIVE')}
-              className={`px-3 py-1.5 rounded transition-all whitespace-nowrap ${
-                filterType === 'ACTIVE'
-                  ? 'bg-red-600 text-white shadow-xs'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              {t('udhar_filter_active')} ({activeUdharCustomers.length})
-            </button>
-            <button
-              onClick={() => setFilterType('OVERDUE')}
-              className={`px-3 py-1.5 rounded transition-all whitespace-nowrap ${
-                filterType === 'OVERDUE'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              {t('udhar_filter_overdue')} ({overdueCustomers.length})
-            </button>
-            <button
-              onClick={() => setFilterType('ALL')}
-              className={`px-3 py-1.5 rounded transition-all whitespace-nowrap ${
-                filterType === 'ALL'
-                  ? 'bg-[#0F2942] text-white shadow-xs'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              {t('udhar_filter_all')} ({customers.length})
-            </button>
-            <button
-              onClick={() => setFilterType('SETTLED')}
-              className={`px-3 py-1.5 rounded transition-all whitespace-nowrap ${
-                filterType === 'SETTLED'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              {t('udhar_filter_settled')}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Udhar Register Table */}
+      {/* Main Udhar Register Table (Centerpiece Front View!) */}
       <div ref={printRef} className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-red-600" />
+        <div className="px-3 py-2 border-b border-slate-200 bg-slate-50/70 flex justify-between items-center">
+          <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+            <Wallet className="w-3.5 h-3.5 text-red-600" />
             <span>Customer Udhar Ledger Register</span>
           </h3>
-          <span className="text-xs text-slate-500 font-mono">
-            Showing {filteredCustomers.length} records
+          <span className="text-[11px] text-slate-500 font-mono">
+            Showing {filteredCustomers.length} accounts
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-270px)] md:max-h-[480px] overflow-y-auto">
           <table className="w-full text-xs text-left">
-            <thead className="table-header">
+            <thead className="table-header sticky top-0 z-10 bg-slate-100 shadow-2xs">
               <tr>
                 <th className="py-3 px-3">Customer Details</th>
                 <th className="py-3 px-3">Mobile & Address</th>
@@ -602,6 +564,128 @@ export const UdharKhataManager: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Below Section: Detailed KPI Cards, Aging & Credit Insights (Scroll Down) */}
+      <div className="space-y-3 pt-1">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+          <span>Detailed Credit Analytics &amp; KPI Cards (Scroll Down)</span>
+          <span className="h-px bg-slate-200 flex-1"></span>
+        </div>
+
+        {/* Detailed KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Total Outstanding */}
+          <div className="bg-white p-3.5 rounded-lg border border-red-200 shadow-xs relative overflow-hidden bg-gradient-to-br from-white to-red-50/40">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10.5px] font-semibold text-red-700 uppercase tracking-wide">
+                  {t('udhar_total_outstanding')}
+                </span>
+                <div className="text-xl font-black text-red-700 mt-1 font-mono">
+                  {formatCurrency(totalOutstanding)}
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center">
+                <IndianRupee className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{activeUdharCustomers.length} active credit accounts</span>
+            </div>
+          </div>
+
+          {/* Total Customers with Dues */}
+          <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">
+                  {t('udhar_customers_count')}
+                </span>
+                <div className="text-xl font-black text-slate-900 mt-1">
+                  {activeUdharCustomers.length}
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                <Users className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              Out of {customers.length} total customers
+            </div>
+          </div>
+
+          {/* Pending Follow-ups */}
+          <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">
+                  {t('udhar_pending_followups')}
+                </span>
+                <div className="text-xl font-black text-amber-800 mt-1">
+                  {overdueCustomers.length}
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                <Clock className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-amber-700 font-semibold">
+              Due today or overdue for call/visit
+            </div>
+          </div>
+
+          {/* Settled Accounts */}
+          <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Settled Accounts (₹0)
+                </span>
+                <div className="text-xl font-black text-emerald-800 mt-1">
+                  {customers.filter(c => c.dues_balance === 0).length}
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-emerald-700 font-semibold">
+              Fully paid &amp; up to date
+            </div>
+          </div>
+        </div>
+
+        {/* Overdue Follow-up Priority Box */}
+        {overdueCustomers.length > 0 && (
+          <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs space-y-2">
+            <div className="font-bold text-amber-900 flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-700" />
+              <span>Priority Follow-up Required ({overdueCustomers.length} accounts due or overdue)</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {overdueCustomers.slice(0, 6).map((c) => (
+                <div key={c.id} className="bg-white p-2 rounded border border-amber-200 flex justify-between items-center">
+                  <div>
+                    <div className="font-bold text-slate-900">{c.name}</div>
+                    <div className="text-[10.5px] text-slate-500">{c.mobile}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-red-600">₹{c.dues_balance.toFixed(0)}</div>
+                    <button
+                      type="button"
+                      onClick={() => sendWhatsAppReminder(c)}
+                      className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
+                    >
+                      Send Reminder
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Record Vasuli Modal */}
@@ -909,6 +993,19 @@ export const UdharKhataManager: React.FC = () => {
         <CustomerDetailModal
           customer={selectedCustomerForLedger}
           onClose={() => setSelectedCustomerForLedger(null)}
+        />
+      )}
+
+      {/* Editable WhatsApp Reminder Dispatch Modal */}
+      {waModalData && (
+        <WhatsAppModal
+          isOpen={waModalData.isOpen}
+          onClose={() => setWaModalData(null)}
+          recipientName={waModalData.name}
+          recipientPhone={waModalData.phone}
+          initialMessage={waModalData.message}
+          defaultTarget={settings.whatsapp_target || 'desktop'}
+          title="Send Udhar Reminder via WhatsApp"
         />
       )}
     </div>

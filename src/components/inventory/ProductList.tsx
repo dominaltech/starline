@@ -358,6 +358,7 @@ export const ProductList: React.FC = () => {
                   const currentName = inlineEdits[p.id]?.name ?? p.name;
                   const currentSellPrice = inlineEdits[p.id]?.selling_price ?? p.selling_price;
                   const currentStock = inlineEdits[p.id]?.stock_qty ?? p.stock_qty;
+                  const currentBuyPrice = inlineEdits[p.id]?.buy_price ?? p.buy_price ?? 0;
 
                   return (
                     <tr
@@ -436,10 +437,34 @@ export const ProductList: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Buy Price */}
+                      {/* Buy Price (Inline editable for Super Admin) */}
                       {isSuperAdmin && (
-                        <td className="py-2 px-3 text-right font-bold text-blue-900">
-                          {p.buy_price !== undefined ? formatCurrency(p.buy_price) : '-'}
+                        <td className="py-2 px-3 text-right">
+                          {activeCellId === `${p.id}_buy_price` ? (
+                            <input
+                              type="number"
+                              autoFocus
+                              min="0"
+                              step="any"
+                              value={currentBuyPrice}
+                              onChange={(e) =>
+                                updateInlineEdit(p.id, 'buy_price', parseFloat(e.target.value) || 0)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveInlineEdit(p);
+                                if (e.key === 'Escape') cancelInlineEdit(p.id);
+                              }}
+                              className="w-24 text-right px-2 py-1 border border-blue-900 rounded text-xs font-black bg-white"
+                            />
+                          ) : (
+                            <div
+                              onClick={() => startInlineEdit(p.id, 'buy_price', p.buy_price ?? 0)}
+                              className="cursor-pointer font-bold text-blue-900 hover:text-blue-700 hover:underline px-1 py-0.5 rounded"
+                              title="Click to edit buy price"
+                            >
+                              {p.buy_price !== undefined ? formatCurrency(currentBuyPrice) : '-'}
+                            </div>
+                          )}
                         </td>
                       )}
 

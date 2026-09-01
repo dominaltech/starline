@@ -6,6 +6,8 @@ import { numberToIndianWords } from '../../utils/numberToWords';
 import { formatDateInput, formatDate } from '../../utils/formatters';
 import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
 import { BillPrintTemplate } from './BillPrintTemplate';
+import { WhatsAppModal } from '../common/WhatsAppModal';
+import { interpolateTemplate } from '../../utils/whatsapp';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
@@ -125,6 +127,12 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
   // Print Preview Modal State
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [waModalData, setWaModalData] = useState<{
+    isOpen: boolean;
+    name: string;
+    phone: string;
+    message: string;
+  } | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
   const [waLanguage, setWaLanguage] = useState<'mr' | 'hi' | 'en'>('mr');
   const printRef = useRef<HTMLDivElement>(null);
@@ -343,7 +351,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     }
   };
 
-  // Build WhatsApp Message
+  // Build WhatsApp Message using configurable templates from Settings
   const buildBillWhatsAppMessage = (bill: Bill, lang: 'mr' | 'hi' | 'en'): string => {
     const itemsList = bill.items
       .map(
@@ -352,73 +360,40 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
       )
       .join('\n');
 
+    let template = settings.msg_template_bill_en || '';
     if (lang === 'mr') {
-      return (
-        `*${settings.shop_name}*\n` +
-        `दुकान क्र. ३, अन्वर इस्टेट, दक्षिण सदर बाजार, सोलापूर\n` +
-        `मोबाईल: ${settings.mobiles}\n\n` +
-        `*बिल / पावती तपशील*\n` +
-        `बिल क्र.: *#${bill.invoice_num}*\n` +
-        `दिनांक: ${formatDate(bill.invoice_date)}\n` +
-        `ग्राहक: ${bill.customer_name}\n` +
-        (bill.product_name_desc ? `उपकरण: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
-        `------------------------\n` +
-        `*सुटे भाग तपशील:*\n` +
-        `${itemsList}\n` +
-        `------------------------\n` +
-        `*एकूण रक्कम (Grand Total): ₹${bill.grand_total.toFixed(2)}*\n` +
-        `जमा रक्कम (Paid): ₹${bill.paid_amount.toFixed(2)}\n` +
-        (bill.due_amount > 0 ? `*बाकी रक्कम (Dues): ₹${bill.due_amount.toFixed(2)}*\n` : `बाकी: ₹0.00 (पूर्ण भरणा)\n`) +
-        `\nस्टार लाईन सर्व्हिसेस निवडल्याबद्दल धन्यवाद!`
-      );
+      template = settings.msg_template_bill_mr || template;
     } else if (lang === 'hi') {
-      return (
-        `*${settings.shop_name}*\n` +
-        `दुकान क्र. ३, अनवर एस्टेट, दक्षिण सदर बाजार, सोलापुर\n` +
-        `संपर्क: ${settings.mobiles}\n\n` +
-        `*बिल / रसीद विवरण*\n` +
-        `बिल क्र.: *#${bill.invoice_num}*\n` +
-        `दिनांक: ${formatDate(bill.invoice_date)}\n` +
-        `ग्राहक: ${bill.customer_name}\n` +
-        (bill.product_name_desc ? `उपकरण: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
-        `------------------------\n` +
-        `*स्पेयर पार्ट्स विवरण:*\n` +
-        `${itemsList}\n` +
-        `------------------------\n` +
-        `*कुल राशि: ₹${bill.grand_total.toFixed(2)}*\n` +
-        `प्राप्त राशि: ₹${bill.paid_amount.toFixed(2)}\n` +
-        (bill.due_amount > 0 ? `*बकाया राशि: ₹${bill.due_amount.toFixed(2)}*\n` : `बकाया: ₹0.00 (पूर्ण भुगतान)\n`) +
-        `\nस्टार लाइन सर्विसेज में सेवा का अवसर देने हेतु धन्यवाद!`
-      );
-    } else {
-      return (
-        `*${settings.shop_name}*\n` +
-        `Shop No. 3, Anvar Estate, South Sadar Bazar, Solapur\n` +
-        `Contact: ${settings.mobiles}\n\n` +
-        `*INVOICE / RECEIPT SUMMARY*\n` +
-        `Invoice #: *#${bill.invoice_num}*\n` +
-        `Date: ${formatDate(bill.invoice_date)}\n` +
-        `Customer: ${bill.customer_name}\n` +
-        (bill.product_name_desc ? `Appliance: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n` : '') +
-        `------------------------\n` +
-        `*Items Replaced:*\n` +
-        `${itemsList}\n` +
-        `------------------------\n` +
-        `*Grand Total: ₹${bill.grand_total.toFixed(2)}*\n` +
-        `Amount Paid: ₹${bill.paid_amount.toFixed(2)}\n` +
-        (bill.due_amount > 0 ? `*Outstanding Dues: ₹${bill.due_amount.toFixed(2)}*\n` : `Dues: ₹0.00 (Fully Settled)\n`) +
-        `\nThank you for choosing Star Line Services!`
-      );
+      template = settings.msg_template_bill_hi || template;
     }
+
+    const applianceLine = bill.product_name_desc
+      ? `उपकरण / Appliance: ${bill.product_name_desc} ${bill.brand_model_no || ''}\n`
+      : '';
+
+    return interpolateTemplate(template, {
+      shop_name: settings.shop_name,
+      mobiles: settings.mobiles,
+      invoice_num: bill.invoice_num,
+      invoice_date: formatDate(bill.invoice_date),
+      customer_name: bill.customer_name,
+      appliance_line: applianceLine,
+      items_list: itemsList,
+      grand_total: bill.grand_total.toFixed(2),
+      paid_amount: bill.paid_amount.toFixed(2),
+      due_amount: bill.due_amount.toFixed(2)
+    });
   };
 
   const handleSendWhatsApp = () => {
     if (!previewBill) return;
-    const cleanMobile = previewBill.customer_mobile.replace(/\D/g, '');
-    const mobileWithCode = cleanMobile.length === 10 ? `91${cleanMobile}` : cleanMobile;
-    const msg = encodeURIComponent(buildBillWhatsAppMessage(previewBill, waLanguage));
-    const url = `https://wa.me/${mobileWithCode}?text=${msg}`;
-    window.open(url, '_blank');
+    const msg = buildBillWhatsAppMessage(previewBill, waLanguage);
+    setWaModalData({
+      isOpen: true,
+      name: previewBill.customer_name,
+      phone: previewBill.customer_mobile,
+      message: msg
+    });
   };
 
   const resetForm = () => {
@@ -452,59 +427,84 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      {/* Mode Selector & Action Bar */}
-      <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 bg-white p-3 sm:p-4 rounded-lg border border-slate-200 shadow-xs">
-        {/* Tab switch: Estimate vs GST */}
-        <div className="flex bg-slate-100 p-1 rounded-md">
-          <button
-            onClick={() => setBillType('ESTIMATE')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded text-xs font-bold transition-all text-center ${
-              billType === 'ESTIMATE'
-                ? 'bg-[#0F2942] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {t('bill_mode_estimate')}
-          </button>
-          <button
-            onClick={() => setBillType('GST')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded text-xs font-bold transition-all text-center ${
-              billType === 'GST'
-                ? 'bg-[#0F2942] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {t('bill_mode_gst')}
-          </button>
+      {/* Top Action Bar with Mode Switcher & Direct Action Triggers */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Mode Switcher */}
+          <div className="flex bg-slate-100 p-1 rounded-md">
+            <button
+              type="button"
+              onClick={() => setBillType('ESTIMATE')}
+              className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                billType === 'ESTIMATE'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {t('bill_mode_estimate')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillType('GST')}
+              className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                billType === 'GST'
+                  ? 'bg-[#0F2942] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {t('bill_mode_gst')}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs border-l border-slate-200 pl-2.5">
+            <span className="font-semibold text-slate-600">{t('bill_invoice_no')}:</span>
+            <input
+              type="text"
+              value={invoiceNum}
+              onChange={(e) => setInvoiceNum(e.target.value)}
+              className="w-16 sm:w-20 border border-slate-300 rounded px-2 py-1 text-xs font-bold text-red-600 text-center"
+            />
+
+            <span className="font-semibold text-slate-600 ml-1">{t('bill_date')}:</span>
+            <input
+              type="date"
+              value={invoiceDate}
+              onChange={(e) => setInvoiceDate(e.target.value)}
+              className="border border-slate-300 rounded px-2 py-1 text-xs font-medium"
+            />
+          </div>
         </div>
 
         {saveSuccessMsg && (
-          <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded border border-emerald-200 font-semibold animate-pulse">
-            <CheckCircle className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200 font-semibold animate-pulse">
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
             <span>{t('bill_saved_success')}</span>
           </div>
         )}
 
-        {/* Save and Print Buttons */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        {/* Save and Print Buttons Right at Top */}
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <button
+            type="button"
             onClick={resetForm}
-            className="btn-secondary text-xs px-3 py-2 flex-1 sm:flex-none justify-center"
+            className="btn-secondary text-xs px-3 py-1.5"
             title="Clear current form"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>{t('action_clear')}</span>
           </button>
           <button
+            type="button"
             onClick={() => handleSaveBill(false)}
-            className="btn-secondary text-xs px-3 py-2 text-slate-800 flex-1 sm:flex-none justify-center"
+            className="btn-secondary text-xs px-3.5 py-1.5 text-slate-800 font-semibold"
           >
             <Save className="w-3.5 h-3.5 text-blue-900" />
             <span>{t('action_save')}</span>
           </button>
           <button
+            type="button"
             onClick={() => handleSaveBill(true)}
-            className="btn-primary text-xs px-4 py-2 flex-1 sm:flex-none justify-center"
+            className="btn-primary text-xs px-4 py-1.5 bg-[#0F2942] hover:bg-[#1e3a5f] text-white shadow-xs"
           >
             <Printer className="w-4 h-4 text-white" />
             <span>{t('action_save_print')}</span>
@@ -512,68 +512,20 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
         </div>
       </div>
 
-      {/* Main Bill Container — Replicating physical pad layout */}
+      {/* Main Bill Container — Compact Front Section + Extended Details Below */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
-        {/* Bill Pad Top Header */}
-        <div className="p-4 sm:p-6 bg-slate-50/60 border-b border-slate-200">
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+        {/* Front Section: Compact Customer & Appliance Details */}
+        <div className="p-3 sm:p-4 bg-white border-b border-slate-200 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            {/* Customer Name */}
             <div>
-              <div className="flex items-center gap-2 text-red-600 font-black text-lg sm:text-xl tracking-tight font-serif">
-                <span className="text-xl sm:text-2xl">★</span>
-                <span>{settings.shop_name}</span>
-              </div>
-              <div className="text-xs text-slate-700 font-medium mt-0.5">
-                {settings.address_line1} {settings.address_line2}
-              </div>
-              <div className="text-xs italic text-slate-600 mt-0.5">{settings.tagline}</div>
-            </div>
-
-            <div className="text-left sm:text-right">
-              <div className="text-xs font-bold text-slate-800">Mob : {settings.mobiles}</div>
-              {isGST && (
-                <div className="text-xs font-mono font-bold text-red-700 mt-0.5">
-                  GSTIN : {settings.gstin}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <h2 className="text-sm font-black tracking-wider uppercase underline text-slate-900">
-              {isGST ? t('bill_title_gst') : t('bill_title_estimate')}
-            </h2>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="font-semibold text-slate-700">{t('bill_date')}:</span>
-                <input
-                  type="date"
-                  value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="border border-slate-300 rounded px-2 py-1 text-xs font-medium focus:ring-1 focus:ring-blue-900"
-                />
-              </div>
-
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="font-semibold text-slate-700">{t('bill_invoice_no')}:</span>
-                <input
-                  type="text"
-                  value={invoiceNum}
-                  onChange={(e) => setInvoiceNum(e.target.value)}
-                  className="w-20 border border-slate-300 rounded px-2 py-1 text-xs font-bold text-red-600 focus:ring-1 focus:ring-red-600"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Customer & Appliance Details Form */}
-        <div className="p-4 sm:p-6 border-b border-slate-200 bg-white space-y-4">
-          {/* Customer Search & Name Block */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {t('bill_cust_name_label')}
+              <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>{t('bill_cust_name_label')} *</span>
+                {customerDues > 0 && (
+                  <span className="text-[10px] text-amber-800 bg-amber-100 font-bold px-1.5 py-0.2 rounded">
+                    Dues: ₹{customerDues.toFixed(0)}
+                  </span>
+                )}
               </label>
               <SearchableCombobox
                 value={customerName}
@@ -586,93 +538,86 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                 }}
                 options={customerOptions}
                 placeholder={t('bill_cust_search_placeholder')}
-                inputClassName="font-semibold"
+                inputClassName="py-1 px-2 text-xs font-semibold"
               />
             </div>
 
+            {/* Mobile */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_mobile_no')} :</label>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">{t('bill_mobile_no')} :</label>
               <input
                 type="text"
-                placeholder="10-digit mobile number"
+                placeholder="10-digit number"
                 value={customerMobile}
                 onChange={(e) => {
                   setCustomerMobile(e.target.value);
                   setCustomerSearchQuery(e.target.value);
                 }}
-                className="input-field font-mono font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_address')} :</label>
-              <input
-                type="text"
-                placeholder="Street address, colony, landmark"
-                value={customerAddress}
-                onChange={(e) => setCustomerAddress(e.target.value)}
-                className="input-field text-xs"
+                className="input-field text-xs py-1 px-2 font-mono font-medium"
               />
             </div>
 
-            {isGST && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t('bill_gstin')} :
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 27AAACA9593P1ZV"
-                  value={customerGstin}
-                  onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
-                  className="input-field font-mono text-xs uppercase"
-                />
-              </div>
-            )}
-
-            {customerDues > 0 && (
-              <div className="flex items-center text-xs text-amber-800 bg-amber-50 px-3 py-1.5 rounded border border-amber-200">
-                <span>Existing Outstanding Dues: <strong>₹{customerDues.toFixed(2)}</strong></span>
-              </div>
-            )}
-          </div>
-
-          {/* Appliance & Model Details Block */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
+            {/* Appliance */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_appliance')} :</label>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">{t('bill_appliance')} :</label>
               <input
                 type="text"
-                placeholder="e.g. Refrigerator / AC / Washing Machine"
+                placeholder="e.g. Refrigerator / AC"
                 value={productNameDesc}
                 onChange={(e) => setProductNameDesc(e.target.value)}
-                className="input-field text-xs"
+                className="input-field text-xs py-1 px-2 font-medium"
               />
             </div>
 
+            {/* Brand / Model */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_brand_model')} :</label>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">{t('bill_brand_model')} :</label>
               <input
                 type="text"
                 placeholder="e.g. LG 190L / Voltas 1.5T"
                 value={brandModelNo}
                 onChange={(e) => setBrandModelNo(e.target.value)}
-                className="input-field text-xs"
+                className="input-field text-xs py-1 px-2 font-medium"
               />
             </div>
           </div>
+
+          {/* Optional Address & GSTIN row (compact) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-0.5">
+            <div className={isGST ? "lg:col-span-3" : "lg:col-span-4"}>
+              <input
+                type="text"
+                placeholder="Customer Address / Location..."
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                className="input-field text-xs py-1 px-2"
+              />
+            </div>
+            {isGST && (
+              <div>
+                <input
+                  type="text"
+                  placeholder="GSTIN (e.g. 27AAACA9593P1ZV)"
+                  value={customerGstin}
+                  onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
+                  className="input-field font-mono text-xs uppercase py-1 px-2"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* SPARES REPLACED Table */}
-        <div className="p-4 sm:p-6">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-              {t('bill_spares_section')}
+        {/* Front Section: SPARES REPLACED Table */}
+        <div className="p-3 sm:p-4">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <span>{t('bill_spares_section')}</span>
+              <span className="text-[10.5px] font-normal text-slate-400 capitalize">
+                ({items.length} items added)
+              </span>
             </h3>
-            <span className="text-[11px] text-slate-500 italic hidden sm:inline">
-              {t('bill_spares_hint')}
+            <span className="text-[10.5px] text-slate-400 italic hidden sm:inline">
+              Click ▼ in item box to browse entire catalog
             </span>
           </div>
 
@@ -680,25 +625,25 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             <table className="w-full text-xs text-left">
               <thead className="table-header">
                 <tr>
-                  <th className="py-2.5 px-2 w-10 text-center">{t('bill_col_sr')}</th>
-                  <th className="py-2.5 px-3">{t('bill_col_item')}</th>
+                  <th className="py-2 px-2 w-10 text-center">{t('bill_col_sr')}</th>
+                  <th className="py-2 px-3">{t('bill_col_item')}</th>
                   {isGST && (
                     <>
-                      <th className="py-2.5 px-2 w-24 text-right">{t('bill_col_rate')}</th>
-                      <th className="py-2.5 px-2 w-20 text-right">{t('bill_col_disc')}</th>
+                      <th className="py-2 px-2 w-24 text-right">{t('bill_col_rate')}</th>
+                      <th className="py-2 px-2 w-20 text-right">{t('bill_col_disc')}</th>
                     </>
                   )}
-                  <th className="py-2.5 px-2 w-16 text-center">{t('bill_col_qty')}</th>
-                  <th className="py-2.5 px-3 w-28 text-right">{t('bill_col_amount')}</th>
-                  <th className="py-2.5 px-2 w-10 text-center"></th>
+                  <th className="py-2 px-2 w-16 text-center">{t('bill_col_qty')}</th>
+                  <th className="py-2 px-3 w-28 text-right">{t('bill_col_amount')}</th>
+                  <th className="py-2 px-2 w-10 text-center"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {items.map((item, index) => (
                   <tr key={item.id || index} className="hover:bg-slate-50/60 relative">
-                    <td className="py-2 px-2 text-center font-bold text-slate-600">{index + 1}</td>
+                    <td className="py-1.5 px-2 text-center font-bold text-slate-600">{index + 1}</td>
 
-                    <td className="py-2 px-3">
+                    <td className="py-1.5 px-3">
                       <SearchableCombobox
                         value={item.item_description}
                         onChange={(val) => handleItemDescriptionChange(index, val)}
@@ -713,7 +658,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
 
                     {isGST && (
                       <>
-                        <td className="py-2 px-2">
+                        <td className="py-1.5 px-2">
                           <input
                             type="number"
                             min="0"
@@ -723,7 +668,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                             className="w-full text-right px-2 py-1 border border-slate-300 rounded text-xs font-medium"
                           />
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-1.5 px-2">
                           <input
                             type="number"
                             min="0"
@@ -736,7 +681,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                       </>
                     )}
 
-                    <td className="py-2 px-2">
+                    <td className="py-1.5 px-2">
                       <input
                         type="number"
                         min="1"
@@ -746,7 +691,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                       />
                     </td>
 
-                    <td className="py-2 px-3 text-right font-bold text-slate-900">
+                    <td className="py-1.5 px-3 text-right font-bold text-slate-900">
                       {billType === 'ESTIMATE' ? (
                         <input
                           type="number"
@@ -761,11 +706,13 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                       )}
                     </td>
 
-                    <td className="py-2 px-2 text-center">
+                    <td className="py-1.5 px-2 text-center">
                       <button
+                        type="button"
                         onClick={() => removeItemRow(index)}
                         disabled={items.length <= 1}
-                        className="text-slate-400 hover:text-rose-600 disabled:opacity-30"
+                        className="text-slate-400 hover:text-rose-600 disabled:opacity-30 cursor-pointer"
+                        title="Remove item"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -776,52 +723,114 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </table>
           </div>
 
-          <div className="flex justify-between items-center mt-3">
+          <div className="mt-2">
             <button
+              type="button"
               onClick={addItemRow}
-              className="btn-secondary text-xs px-3 py-1.5"
+              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1 cursor-pointer font-bold"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>{t('action_add_item')}</span>
             </button>
+          </div>
 
-            {/* Totals Breakdown */}
-            <div className="w-72 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1.5">
-              {isGST ? (
-                <>
-                  <div className="flex justify-between text-slate-600">
-                    <span>{t('bill_taxable_subtotal')}:</span>
-                    <span className="font-semibold">₹{totalTaxable.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>{t('bill_cgst')}:</span>
-                    <span className="font-semibold">₹{totalCgst.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>{t('bill_sgst')}:</span>
-                    <span className="font-semibold">₹{totalSgst.toFixed(2)}</span>
-                  </div>
-                </>
-              ) : null}
-
-              <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-300">
-                <span>{t('bill_grand_total')}:</span>
-                <span>₹{grandTotal.toFixed(2)}</span>
+          {/* Front Section: Live Grand Total & Instant Payment / Save Strip */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            {/* Left: Amount Paid & Dues Balance */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-bold text-slate-700">{t('bill_amount_received')}:</span>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1 text-xs text-slate-400 font-bold">₹</span>
+                  <input
+                    type="number"
+                    placeholder={`${grandTotal.toFixed(0)}`}
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
+                    className="w-28 pl-5 pr-2 py-1 text-xs font-bold text-emerald-800 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-600 bg-white"
+                  />
+                </div>
               </div>
+
+              {/* Status pill */}
+              {(() => {
+                const paidVal = paidAmount === '' ? grandTotal : parseFloat(paidAmount) || 0;
+                const due = Math.max(0, grandTotal - paidVal);
+                return due > 0 ? (
+                  <span className="text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full">
+                    Due: ₹{due.toFixed(2)} (Udhar)
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                    ✓ Fully Paid
+                  </span>
+                );
+              })()}
+            </div>
+
+            {/* Right: Grand Total & Instant Save & Print Button */}
+            <div className="flex items-center gap-3 justify-end">
+              {isGST && (
+                <div className="hidden md:flex items-center gap-3 text-xs text-slate-500 font-medium">
+                  <span>Taxable: ₹{totalTaxable.toFixed(2)}</span>
+                  <span>GST: ₹{(totalCgst + totalSgst).toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block leading-none">Grand Total</span>
+                <span className="text-lg sm:text-xl font-black text-slate-900 font-mono">
+                  ₹{grandTotal.toFixed(2)}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleSaveBill(true)}
+                className="btn-primary text-xs px-4 py-2 bg-[#0F2942] hover:bg-[#1e3a5f] text-white flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                title="Save and open print preview immediately"
+              >
+                <Printer className="w-4 h-4" />
+                <span className="font-bold">Save &amp; Print</span>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Footer Configuration Block */}
-        <div className="p-4 sm:p-6 bg-slate-50/70 border-t border-slate-200 space-y-4">
+        {/* Below Section: Extended Details, Physical Pad Replica, Terms & Staff Assignment */}
+        <div className="p-4 sm:p-5 bg-slate-50/70 border-t border-slate-200 space-y-4">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <span>Additional Invoice Details &amp; Pad Preview (Scroll Down)</span>
+            <span className="h-px bg-slate-200 flex-1"></span>
+          </div>
+
+          {/* Shop Letterhead replica (Physical Pad layout) */}
+          <div className="p-3.5 bg-white rounded-lg border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-red-600 font-black text-base tracking-tight font-serif">
+                <span>★</span>
+                <span>{settings.shop_name}</span>
+              </div>
+              <div className="text-xs text-slate-600 font-medium mt-0.5">
+                {settings.address_line1} {settings.address_line2} • {settings.tagline}
+              </div>
+            </div>
+            <div className="text-left sm:text-right text-xs font-bold text-slate-700">
+              <div>Mob: {settings.mobiles}</div>
+              {isGST && settings.gstin && <div className="text-red-700 font-mono">GSTIN: {settings.gstin}</div>}
+            </div>
+          </div>
+
+          {/* Amount in Words */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">{t('bill_rupees_in_words')}</label>
-            <div className="p-2 bg-white rounded border border-slate-300 text-xs font-semibold italic text-slate-800">
+            <div className="p-2.5 bg-white rounded border border-slate-200 text-xs font-semibold italic text-slate-800">
               {wordsAmount}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Worker Assignment & Terms */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 {t('bill_assigned_worker')}
@@ -837,20 +846,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
                 }}
                 options={workerOptions}
                 placeholder="Select technician / staff..."
-                inputClassName="text-xs font-medium"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {t('bill_amount_received')}
-              </label>
-              <input
-                type="number"
-                placeholder={`Default: ₹${grandTotal}`}
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(e.target.value)}
-                className="input-field text-xs font-bold text-emerald-800"
+                inputClassName="text-xs font-medium py-1"
               />
             </div>
 
@@ -867,40 +863,32 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </div>
           </div>
 
-          {/* Bottom Direct Save & Print Trigger Bar */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-slate-200">
-            <span className="text-xs text-slate-500 italic">
-              All records saved securely to local browser storage.
-            </span>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={resetForm}
-                className="btn-secondary text-xs px-3 py-2 flex-1 sm:flex-none justify-center"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>{t('action_clear')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSaveBill(false)}
-                className="btn-secondary text-xs px-4 py-2 text-slate-800 flex-1 sm:flex-none justify-center"
-              >
-                <Save className="w-3.5 h-3.5 text-blue-900" />
-                <span>{t('action_save')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSaveBill(true)}
-                className="btn-primary text-xs px-5 py-2 flex-1 sm:flex-none justify-center bg-[#0F2942] hover:bg-[#1e3a5f]"
-              >
-                <Printer className="w-4 h-4 text-white" />
-                <span>{t('action_save_print')}</span>
-              </button>
-            </div>
+          {/* Secondary Action Bar at bottom */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="btn-secondary text-xs px-3 py-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{t('action_clear')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveBill(false)}
+              className="btn-secondary text-xs px-4 py-1.5 font-semibold text-slate-800"
+            >
+              <Save className="w-3.5 h-3.5 text-blue-900" />
+              <span>{t('action_save')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveBill(true)}
+              className="btn-primary text-xs px-5 py-1.5 bg-[#0F2942] hover:bg-[#1e3a5f] text-white"
+            >
+              <Printer className="w-4 h-4 text-white" />
+              <span>{t('action_save_print')}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1029,6 +1017,19 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </div>
           </div>
         </div>
+      )}
+
+      {/* Editable WhatsApp Dispatch Modal */}
+      {waModalData && (
+        <WhatsAppModal
+          isOpen={waModalData.isOpen}
+          onClose={() => setWaModalData(null)}
+          recipientName={waModalData.name}
+          recipientPhone={waModalData.phone}
+          initialMessage={waModalData.message}
+          defaultTarget={settings.whatsapp_target || 'desktop'}
+          title="Send Invoice Summary via WhatsApp"
+        />
       )}
     </div>
   );

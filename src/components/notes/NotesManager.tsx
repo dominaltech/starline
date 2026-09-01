@@ -3,6 +3,8 @@ import { useDb } from '../../context/DbContext';
 import { AppNote, Product } from '../../types';
 import { formatDate } from '../../utils/formatters';
 import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
+import { WhatsAppModal } from '../common/WhatsAppModal';
+import { interpolateTemplate } from '../../utils/whatsapp';
 import {
   ClipboardList,
   Plus,
@@ -74,6 +76,12 @@ export const NotesManager: React.FC<NotesManagerProps> = ({
   const [showDealerModal, setShowDealerModal] = useState<boolean>(false);
   const [selectedDealerId, setSelectedDealerId] = useState<string>('');
   const [dealerMsgLang, setDealerMsgLang] = useState<'mr' | 'hi' | 'en'>('mr');
+  const [waModalData, setWaModalData] = useState<{
+    isOpen: boolean;
+    name: string;
+    phone: string;
+    message: string;
+  } | null>(null);
 
   // Helper to build rich structured order template from low stock items
   const buildLowStockOrderText = (items: Product[]): string => {
@@ -353,48 +361,24 @@ export const NotesManager: React.FC<NotesManagerProps> = ({
     setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
 
-  // WhatsApp Dealer Message Builder
+  // WhatsApp Dealer Message Builder using configurable templates from Settings
   const buildDealerOrderMessage = (lang: 'mr' | 'hi' | 'en'): string => {
     const shopName = settings.shop_name;
     const date = formatDate(new Date().toISOString());
 
+    let template = settings.msg_template_order_en || '';
     if (lang === 'mr') {
-      return (
-        `*${shopName}, सोलापूर*\n` +
-        `दिनांक: ${date}\n` +
-        `संपर्क: ${settings.mobiles}\n\n` +
-        `नमस्कार,\n` +
-        `आम्हाला खालील सुटे भाग / साहित्य ऑर्डर करायचे आहे. कृपया दर व उपलब्धता कळवावी:\n` +
-        `------------------------------------\n` +
-        `${content}\n` +
-        `------------------------------------\n` +
-        `कृपया लवकरात लवकर डिलिव्हरी पाठवावी.\n\nधन्यवाद!\n*${shopName}*`
-      );
+      template = settings.msg_template_order_mr || template;
     } else if (lang === 'hi') {
-      return (
-        `*${shopName}, सोलापुर*\n` +
-        `दिनांक: ${date}\n` +
-        `संपर्क: ${settings.mobiles}\n\n` +
-        `नमस्ते,\n` +
-        `हमें निम्नलिखित स्पेयर पार्ट्स / माल का ऑर्डर देना है। कृपया दर व उपलब्धता बताएं:\n` +
-        `------------------------------------\n` +
-        `${content}\n` +
-        `------------------------------------\n` +
-        `कृपया जल्द से जल्द डिलीवरी भेजें।\n\nधन्यवाद!\n*${shopName}*`
-      );
-    } else {
-      return (
-        `*${shopName}, Solapur*\n` +
-        `Date: ${date}\n` +
-        `Contact: ${settings.mobiles}\n\n` +
-        `Hello,\n` +
-        `We would like to place a purchase order for the following spare parts:\n` +
-        `------------------------------------\n` +
-        `${content}\n` +
-        `------------------------------------\n` +
-        `Please confirm availability and earliest dispatch.\n\nThank you!\n*${shopName}*`
-      );
+      template = settings.msg_template_order_hi || template;
     }
+
+    return interpolateTemplate(template, {
+      shop_name: shopName,
+      date: date,
+      mobiles: settings.mobiles,
+      content: content
+    });
   };
 
   const handleSendToDealer = () => {
@@ -404,17 +388,20 @@ export const NotesManager: React.FC<NotesManagerProps> = ({
       return;
     }
 
-    const cleanPhone = dealer.phone.replace(/\D/g, '');
-    const phoneWithCode = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const msg = encodeURIComponent(buildDealerOrderMessage(dealerMsgLang));
-    const url = `https://wa.me/${phoneWithCode}?text=${msg}`;
-    window.open(url, '_blank');
+    const msg = buildDealerOrderMessage(dealerMsgLang);
     setShowDealerModal(false);
 
     // Acknowledge stock alert when sent to dealer
     if (productRefs.length > 0) {
       acknowledgeStockAlerts(productRefs);
     }
+
+    setWaModalData({
+      isOpen: true,
+      name: dealer.name,
+      phone: dealer.phone,
+      message: msg
+    });
   };
 
   // Filtered Notes List
@@ -836,6 +823,19 @@ export const NotesManager: React.FC<NotesManagerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Editable WhatsApp Dispatch Modal for Wholesale Dealer Orders */}
+      {waModalData && (
+        <WhatsAppModal
+          isOpen={waModalData.isOpen}
+          onClose={() => setWaModalData(null)}
+          recipientName={waModalData.name}
+          recipientPhone={waModalData.phone}
+          initialMessage={waModalData.message}
+          defaultTarget={settings.whatsapp_target || 'desktop'}
+          title="Send Dealer Purchase Order via WhatsApp"
+        />
       )}
     </div>
   );
