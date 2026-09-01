@@ -654,6 +654,7 @@ export const B2BBillingScreen: React.FC = () => {
                           isListening={voiceItemIndex === idx}
                           placeholder="Type part name or click ▼ for all..."
                           inputClassName="py-1 px-2 font-semibold"
+                        />
                       </td>
 
                       {/* Quantity */}
