@@ -3,6 +3,7 @@ import { useDb } from '../../context/DbContext';
 import { useAuth } from '../../context/AuthContext';
 import { ShopSettings } from '../../types';
 import { WorkerManager } from './WorkerManager';
+import { MechanicManager } from './MechanicManager';
 import { DealerManager } from './DealerManager';
 import { storage } from '../../db/storage';
 import {
@@ -315,6 +316,9 @@ export const SettingsManager: React.FC = () => {
 
       {/* Workers Management Component */}
       <WorkerManager />
+
+      {/* B2B Mechanics & External Technicians Management Component */}
+      <MechanicManager />
 
       {/* Wholesale Suppliers / Dealers Management Component */}
       <DealerManager />

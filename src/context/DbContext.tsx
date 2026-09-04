@@ -4,6 +4,7 @@ import {
   Product,
   Section,
   Worker,
+  Mechanic,
   ShopSettings,
   Bill,
   CreditNote,
@@ -22,6 +23,7 @@ interface DbContextType {
   products: Product[];
   sections: Section[];
   workers: Worker[];
+  mechanics: Mechanic[];
   bills: Bill[];
   creditNotes: CreditNote[];
   stockMovements: StockMovement[];
@@ -43,6 +45,8 @@ interface DbContextType {
   saveSection: (s: Section) => void;
   deleteSection: (id: string) => void;
   saveWorker: (w: Worker) => void;
+  saveMechanic: (m: Mechanic) => Mechanic;
+  deleteMechanic: (id: string) => void;
   createCreditNote: (cn: Omit<CreditNote, 'id' | 'created_at'>) => CreditNote;
   saveServiceRecord: (r: ServiceRecord) => ServiceRecord;
   deleteServiceRecord: (id: string) => void;
@@ -61,6 +65,7 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [products, setProducts] = useState<Product[]>(() => storage.getProducts(role));
   const [sections, setSections] = useState<Section[]>(() => storage.getSections());
   const [workers, setWorkers] = useState<Worker[]>(() => storage.getWorkers());
+  const [mechanics, setMechanics] = useState<Mechanic[]>(() => storage.getMechanics());
   const [bills, setBills] = useState<Bill[]>(() => storage.getBills());
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>(() => storage.getCreditNotes());
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => storage.getStockMovements());
@@ -77,6 +82,7 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setProducts(storage.getProducts(role));
     setSections(storage.getSections());
     setWorkers(storage.getWorkers());
+    setMechanics(storage.getMechanics());
     setBills(storage.getBills());
     setCreditNotes(storage.getCreditNotes());
     setStockMovements(storage.getStockMovements());
@@ -85,6 +91,7 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setB2BBills(storage.getB2BBills());
     setAcknowledgedAlerts(storage.getAcknowledgedStockAlerts());
   }, [role]);
+
 
   const handleAcknowledgeStockAlerts = (productIds?: string[]) => {
     const updated = storage.acknowledgeStockAlerts(productIds);
@@ -175,6 +182,17 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     refreshData();
   };
 
+  const handleSaveMechanic = (m: Mechanic) => {
+    const res = storage.saveMechanic(m);
+    refreshData();
+    return res;
+  };
+
+  const handleDeleteMechanic = (id: string) => {
+    storage.deleteMechanic(id);
+    refreshData();
+  };
+
   const handleSaveAppNote = (n: AppNote) => {
     const res = storage.saveAppNote(n);
     refreshData();
@@ -203,6 +221,7 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     products,
     sections,
     workers,
+    mechanics,
     bills,
     creditNotes,
     stockMovements,
@@ -224,6 +243,8 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     saveSection: handleSaveSection,
     deleteSection: handleDeleteSection,
     saveWorker: handleSaveWorker,
+    saveMechanic: handleSaveMechanic,
+    deleteMechanic: handleDeleteMechanic,
     createCreditNote: handleCreateCreditNote,
     saveServiceRecord: handleSaveServiceRecord,
     deleteServiceRecord: handleDeleteServiceRecord,

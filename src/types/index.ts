@@ -218,6 +218,18 @@ export interface AppNote {
   updated_at: string;
 }
 
+export interface Mechanic {
+  id: string;
+  name: string;
+  phone: string;
+  workshop_name?: string;
+  address?: string;
+  dues_balance: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface B2BBillItem {
   id: string;
   product_id?: string;
@@ -228,20 +240,33 @@ export interface B2BBillItem {
   image_data?: string;
 }
 
-export type B2BPaymentMethod = 'Cash' | 'PhonePe' | 'GPay' | 'Bank Transfer' | 'Credit';
+export type B2BPaymentMethod =
+  | 'Cash'
+  | 'Online 1'
+  | 'Online 2'
+  | 'Online 3'
+  | 'Udhar'
+  | 'PhonePe'
+  | 'GPay'
+  | 'Bank Transfer'
+  | 'Credit';
 
 export interface B2BBill {
   id: string;
   invoice_num: string; // e.g. "B2B-001"
   bill_date: string; // YYYY-MM-DD
+  mechanic_id?: string;
   mechanic_name: string;
-  customer_name: string;
-  customer_mobile: string;
+  mechanic_phone?: string;
+  customer_name?: string;
+  customer_mobile?: string;
   customer_address?: string;
   items: B2BBillItem[];
   total_amount: number;
   payment_method: B2BPaymentMethod;
   paid_amount: number;
+  due_amount: number;
   notes?: string;
   created_at: string;
 }
+

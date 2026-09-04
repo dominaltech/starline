@@ -3,6 +3,7 @@ import {
   Product,
   Section,
   Worker,
+  Mechanic,
   ShopSettings,
   User,
   Bill,
@@ -20,6 +21,7 @@ import {
   INITIAL_USERS,
   INITIAL_SECTIONS,
   INITIAL_WORKERS,
+  INITIAL_MECHANICS,
   INITIAL_CUSTOMERS,
   INITIAL_PRODUCTS
 } from './initialData';
@@ -34,6 +36,7 @@ const STORAGE_KEYS = {
   CREDIT_NOTES: 'starline_credit_notes',
   STOCK_MOVEMENTS: 'starline_stock_movements',
   WORKERS: 'starline_workers',
+  MECHANICS: 'starline_mechanics',
   ACTIVE_USER: 'starline_active_user',
   SERVICE_RECORDS: 'starline_service_records',
   APP_NOTES: 'starline_app_notes',
@@ -74,6 +77,9 @@ class StorageEngine {
     }
     if (!localStorage.getItem(STORAGE_KEYS.WORKERS)) {
       this.set(STORAGE_KEYS.WORKERS, INITIAL_WORKERS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.MECHANICS)) {
+      this.set(STORAGE_KEYS.MECHANICS, INITIAL_MECHANICS);
     }
     if (!localStorage.getItem(STORAGE_KEYS.CUSTOMERS)) {
       this.set(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
@@ -241,6 +247,18 @@ class StorageEngine {
       customers.push(customer);
     }
     this.set(STORAGE_KEYS.CUSTOMERS, customers);
+
+    // Sync with mechanics table if this customer is a registered mechanic
+    if (customer.mobile) {
+      const mechanics = this.getMechanics();
+      const mech = mechanics.find(m => m.phone && m.phone.trim() === customer.mobile.trim());
+      if (mech && mech.dues_balance !== customer.dues_balance) {
+        mech.dues_balance = customer.dues_balance;
+        mech.updated_at = new Date().toISOString();
+        this.set(STORAGE_KEYS.MECHANICS, mechanics);
+      }
+    }
+
     return customer;
   }
 
@@ -251,8 +269,20 @@ class StorageEngine {
       cust.dues_balance = Math.max(0, Math.round((cust.dues_balance + amountDiff) * 100) / 100);
       cust.updated_at = new Date().toISOString();
       this.set(STORAGE_KEYS.CUSTOMERS, customers);
+
+      // Also sync mechanic dues if phone matches
+      if (cust.mobile) {
+        const mechanics = this.getMechanics();
+        const mech = mechanics.find(m => m.phone && m.phone.trim() === cust.mobile.trim());
+        if (mech && mech.dues_balance !== cust.dues_balance) {
+          mech.dues_balance = cust.dues_balance;
+          mech.updated_at = new Date().toISOString();
+          this.set(STORAGE_KEYS.MECHANICS, mechanics);
+        }
+      }
     }
   }
+
 
   // --- SECTIONS / RACKS ---
   public getSections(): Section[] {
@@ -376,8 +406,83 @@ class StorageEngine {
     this.set(STORAGE_KEYS.WORKERS, workers);
   }
 
+  // --- MECHANICS (B2B CLIENTS) ---
+  public getMechanics(): Mechanic[] {
+    return this.get<Mechanic[]>(STORAGE_KEYS.MECHANICS, []);
+  }
+
+  public getMechanicById(id: string): Mechanic | undefined {
+    return this.getMechanics().find(m => m.id === id);
+  }
+
+  public saveMechanic(mechanic: Mechanic): Mechanic {
+    const mechanics = this.getMechanics();
+    const idx = mechanics.findIndex(m => m.id === mechanic.id);
+    const now = new Date().toISOString();
+    let saved: Mechanic;
+    if (idx >= 0) {
+      saved = { ...mechanic, updated_at: now };
+      mechanics[idx] = saved;
+    } else {
+      saved = { ...mechanic, created_at: mechanic.created_at || now, updated_at: now };
+      mechanics.push(saved);
+    }
+    this.set(STORAGE_KEYS.MECHANICS, mechanics);
+
+    // Sync with customers table so Udhar Khata tracks the mechanic
+    if (saved.phone && saved.phone.trim()) {
+      const customers = this.getCustomers();
+      const existing = customers.find(c => c.mobile.trim() === saved.phone.trim());
+      if (existing) {
+        existing.name = saved.name;
+        existing.address = saved.address || existing.address;
+        existing.dues_balance = saved.dues_balance;
+        existing.updated_at = now;
+        this.saveCustomer(existing);
+      } else {
+        this.saveCustomer({
+          id: 'cust_mech_' + saved.id,
+          name: `${saved.name} (Mechanic)`,
+          mobile: saved.phone.trim(),
+          address: saved.address || saved.workshop_name || '',
+          dues_balance: saved.dues_balance,
+          created_at: now,
+          updated_at: now
+        });
+      }
+    }
+
+    return saved;
+  }
+
+  public deleteMechanic(id: string): void {
+    this.set(STORAGE_KEYS.MECHANICS, this.getMechanics().filter(m => m.id !== id));
+  }
+
+  public updateMechanicDues(mechanicId: string, amountDiff: number): void {
+    const mechanics = this.getMechanics();
+    const m = mechanics.find(mech => mech.id === mechanicId);
+    if (m) {
+      m.dues_balance = Math.max(0, Math.round((m.dues_balance + amountDiff) * 100) / 100);
+      m.updated_at = new Date().toISOString();
+      this.set(STORAGE_KEYS.MECHANICS, mechanics);
+
+      // Also sync customer dues
+      if (m.phone && m.phone.trim()) {
+        const customers = this.getCustomers();
+        const cust = customers.find(c => c.mobile.trim() === m.phone.trim());
+        if (cust) {
+          cust.dues_balance = m.dues_balance;
+          cust.updated_at = new Date().toISOString();
+          this.set(STORAGE_KEYS.CUSTOMERS, customers);
+        }
+      }
+    }
+  }
+
   // --- BILLS & TRANSACTIONAL CREATION ---
   public getBills(): Bill[] {
+
     return this.get<Bill[]>(STORAGE_KEYS.BILLS, []);
   }
 
@@ -682,7 +787,13 @@ class StorageEngine {
   }
 
   public saveB2BBill(bill: B2BBill): B2BBill {
-    // 1. Deduct stock for each line item that has a product_id or matching product name
+    // 1. Calculate due_amount accurately
+    const paid = bill.paid_amount !== undefined ? Number(bill.paid_amount) : bill.total_amount;
+    const due = Math.max(0, Math.round((bill.total_amount - paid) * 100) / 100);
+    bill.paid_amount = paid;
+    bill.due_amount = due;
+
+    // 2. Deduct stock for each line item that has a product_id or matching product name
     const products = this.get<Product[]>(STORAGE_KEYS.PRODUCTS, []);
     const now = new Date().toISOString();
 
@@ -706,36 +817,50 @@ class StorageEngine {
           new_balance: targetProd.stock_qty,
           type: 'SALE',
           reference_id: bill.invoice_num,
-          notes: `B2B Sale: ${bill.invoice_num} to ${bill.customer_name}`,
+          notes: `B2B Sale: ${bill.invoice_num} to ${bill.mechanic_name || bill.customer_name}`,
           created_at: now
         });
       }
     });
     this.set(STORAGE_KEYS.PRODUCTS, products);
 
-    // 2. Auto-create/link customer if mobile provided
-    if (bill.customer_mobile && bill.customer_mobile.trim()) {
+    // 3. Update Mechanic Dues & Sync with Customer Khata
+    if (due > 0) {
+      if (bill.mechanic_id) {
+        this.updateMechanicDues(bill.mechanic_id, due);
+      }
+    }
+
+    const phone = (bill.mechanic_phone || bill.customer_mobile || '').trim();
+    const name = (bill.mechanic_name || bill.customer_name || '').trim();
+    if (phone) {
       const customers = this.getCustomers();
-      const existing = customers.find(c => c.mobile.trim() === bill.customer_mobile.trim());
-      if (!existing && bill.customer_name && bill.customer_name.trim()) {
+      const existing = customers.find(c => c.mobile.trim() === phone);
+      if (existing) {
+        if (due > 0) {
+          existing.dues_balance = Math.max(0, Math.round((existing.dues_balance + due) * 100) / 100);
+        }
+        existing.updated_at = now;
+        this.saveCustomer(existing);
+      } else if (name) {
         this.saveCustomer({
           id: 'cust_' + Date.now(),
-          name: bill.customer_name.trim(),
-          mobile: bill.customer_mobile.trim(),
+          name: `${name} (Mechanic)`,
+          mobile: phone,
           address: bill.customer_address || '',
-          dues_balance: 0,
+          dues_balance: due,
           created_at: now,
           updated_at: now
         });
       }
     }
 
-    // 3. Save bill
+    // 4. Save bill
     const bills = this.getB2BBills();
     bills.unshift(bill);
     this.set(STORAGE_KEYS.B2B_BILLS, bills);
 
-    // 4. Increment counter
+    // 5. Increment counter
     const counter = this.get<number>(STORAGE_KEYS.B2B_INVOICE_COUNTER, 1);
     this.set(STORAGE_KEYS.B2B_INVOICE_COUNTER, counter + 1);
 
@@ -743,7 +868,52 @@ class StorageEngine {
   }
 
   public deleteB2BBill(id: string): void {
-    this.set(STORAGE_KEYS.B2B_BILLS, this.getB2BBills().filter(b => b.id !== id));
+    const target = this.getB2BBills().find(b => b.id === id);
+    if (target) {
+      // Revert product inventory
+      const products = this.get<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+      const now = new Date().toISOString();
+      target.items.forEach((item, idx) => {
+        const prod = products.find(
+          p => p.id === item.product_id || p.name.toLowerCase() === (item.product_name || '').trim().toLowerCase()
+        );
+        if (prod) {
+          prod.stock_qty += item.qty;
+          prod.updated_at = now;
+          this.recordStockMovement({
+            id: 'sm_b2b_revert_' + Date.now() + '_' + idx,
+            product_id: prod.id,
+            product_name: prod.name,
+            change_qty: item.qty,
+            new_balance: prod.stock_qty,
+            type: 'RETURN',
+            reference_id: target.invoice_num,
+            notes: `Deleted B2B Bill #${target.invoice_num} - Stock Restored`,
+            created_at: now
+          });
+        }
+      });
+      this.set(STORAGE_KEYS.PRODUCTS, products);
+
+      // Revert dues if any
+      if (target.due_amount && target.due_amount > 0) {
+        if (target.mechanic_id) {
+          this.updateMechanicDues(target.mechanic_id, -target.due_amount);
+        }
+        const phone = (target.mechanic_phone || target.customer_mobile || '').trim();
+        if (phone) {
+          const customers = this.getCustomers();
+          const match = customers.find(c => c.mobile.trim() === phone);
+          if (match) {
+            match.dues_balance = Math.max(0, Math.round((match.dues_balance - target.due_amount) * 100) / 100);
+            match.updated_at = now;
+            this.saveCustomer(match);
+          }
+        }
+      }
+
+      this.set(STORAGE_KEYS.B2B_BILLS, this.getB2BBills().filter(b => b.id !== id));
+    }
   }
 
   // --- STOCK ALERT ACKNOWLEDGEMENT ---
@@ -784,6 +954,7 @@ class StorageEngine {
       users: this.getUsers(),
       sections: this.getSections(),
       workers: this.getWorkers(),
+      mechanics: this.getMechanics(),
       customers: this.getCustomers(),
       products: this.getProducts('super_admin'),
       bills: this.getBills(),
@@ -801,6 +972,7 @@ class StorageEngine {
       if (data.users) this.set(STORAGE_KEYS.USERS, data.users);
       if (data.sections) this.set(STORAGE_KEYS.SECTIONS, data.sections);
       if (data.workers) this.set(STORAGE_KEYS.WORKERS, data.workers);
+      if (data.mechanics) this.set(STORAGE_KEYS.MECHANICS, data.mechanics);
       if (data.customers) this.set(STORAGE_KEYS.CUSTOMERS, data.customers);
       if (data.products) this.set(STORAGE_KEYS.PRODUCTS, data.products);
       if (data.bills) this.set(STORAGE_KEYS.BILLS, data.bills);
@@ -815,6 +987,7 @@ class StorageEngine {
       return false;
     }
   }
+
 
   public clearAndReset(): void {
     localStorage.clear();

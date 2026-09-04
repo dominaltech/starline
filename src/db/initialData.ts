@@ -1,4 +1,4 @@
-import { Customer, Product, Section, Worker, ShopSettings, User } from '../types';
+import { Customer, Product, Section, Worker, Mechanic, ShopSettings, User } from '../types';
 
 export const INITIAL_SETTINGS: ShopSettings = {
   shop_name: 'STAR LINE SERVICES',
@@ -253,3 +253,40 @@ export const INITIAL_PRODUCTS: Product[] = [
     updated_at: new Date().toISOString()
   }
 ];
+
+export const INITIAL_MECHANICS: Mechanic[] = [
+  {
+    id: 'mech_1',
+    name: 'Santosh Jadhav',
+    phone: '9822334455',
+    workshop_name: 'Santosh AC & Fridge Care',
+    address: 'Near Saat Rasta, Solapur',
+    dues_balance: 650,
+    is_active: true,
+    created_at: new Date(Date.now() - 86400000 * 20).toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'mech_2',
+    name: 'Irfan Bagwan',
+    phone: '9423112233',
+    workshop_name: 'Bagwan Refrigeration Works',
+    address: 'Bhavani Peth, Solapur',
+    dues_balance: 0,
+    is_active: true,
+    created_at: new Date(Date.now() - 86400000 * 15).toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'mech_3',
+    name: 'Ganesh Shinde',
+    phone: '9921445566',
+    workshop_name: 'Shinde Electricals & Spares',
+    address: 'Ashok Chowk, Solapur',
+    dues_balance: 1400,
+    is_active: true,
+    created_at: new Date(Date.now() - 86400000 * 10).toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
