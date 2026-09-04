@@ -171,7 +171,7 @@ export const SettingsManager: React.FC = () => {
       <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-6 space-y-4">
         <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
           <Building className="w-5 h-5 text-blue-900" />
-          <h3 className="text-sm font-bold text-slate-900">Business Profile & Bill Header Details</h3>
+          <h3 className="text-sm font-bold text-slate-900">Business Information &amp; GST Profile</h3>
         </div>
 
         <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
@@ -293,16 +293,6 @@ export const SettingsManager: React.FC = () => {
                 className="input-field font-mono font-bold"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Default Conditions on Printed Bill</label>
-            <textarea
-              rows={3}
-              value={form.default_conditions}
-              onChange={(e) => handleChange('default_conditions', e.target.value)}
-              className="input-field font-mono"
-            />
           </div>
 
           <div className="flex justify-end pt-2">
@@ -838,6 +828,38 @@ export const SettingsManager: React.FC = () => {
               <span>Reset Demo State</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Software Developer Credits & Branding */}
+      <div className="bg-gradient-to-r from-slate-900 via-[#0F2942] to-slate-900 text-white rounded-lg p-5 shadow-sm border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-blue-600/20 border border-blue-400/30 flex items-center justify-center text-blue-400 font-black text-xl shadow-inner">
+            D
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-bold text-white tracking-wide">Starline Services CRM</h4>
+              <span className="px-2 py-0.5 text-[10px] font-mono font-semibold bg-blue-500/20 text-blue-300 rounded border border-blue-400/30">
+                v1.0.0
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Designed &amp; Engineered by <strong className="text-white font-semibold">Dominal Technology</strong>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <a
+            href="https://dominal.in"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-xs hover:shadow-md cursor-pointer"
+          >
+            <Globe className="w-4 h-4" />
+            <span>dominal.in</span>
+          </a>
         </div>
       </div>
     </div>

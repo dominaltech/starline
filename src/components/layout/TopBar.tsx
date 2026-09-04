@@ -100,10 +100,19 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Menu className="w-5 h-5 text-[#0F2942]" />
         </button>
 
-        <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-slate-800 tracking-tight truncate">
+        {/* Brand Header on Top Everywhere */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-[#0F2942] tracking-tight bg-slate-100 px-2 sm:px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
+            <span className="text-red-600 font-serif font-black text-sm">★</span>
+            <span className="font-extrabold tracking-tight">Starline Services CRM</span>
+          </span>
+          <span className="text-slate-300 select-none hidden sm:inline">/</span>
+        </div>
+
+        <h1 className="text-xs sm:text-base lg:text-lg font-bold text-slate-800 tracking-tight truncate">
           {activeTabTitle}
         </h1>
-        <span className="hidden md:inline-block text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono shrink-0">
+        <span className="hidden lg:inline-block text-[10.5px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono shrink-0">
           {t('topbar_terminal')}
         </span>
       </div>

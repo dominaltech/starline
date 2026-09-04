@@ -1,10 +1,17 @@
 import * as XLSX from 'xlsx';
-import { Bill, CreditNote, ShopSettings } from '../types';
+import { Bill, CreditNote, ShopSettings, B2BBill } from '../types';
+
+export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+export function isValidGstin(gstin?: string): boolean {
+  if (!gstin) return false;
+  return GSTIN_REGEX.test(gstin.trim().toUpperCase());
+}
 
 export interface GstPeriodFilter {
   year: number;
-  month: number; // 1-12 (0 for entire year if needed)
-  periodString: string; // e.g. "062026"
+  month: number; // 1-12 (0 for quarterly/annual)
+  periodString: string; // e.g. "062026", "Q12026", "FY2026-27"
   fromDate: string; // YYYY-MM-DD
   toDate: string; // YYYY-MM-DD
 }
@@ -608,6 +615,150 @@ export function generateGstr3bExcel(
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+}
+
+/**
+ * GENERATE MASTER SALES DAYBOOK EXCEL (Tally & CA Audit Format)
+ * Flat structured register listing every outward transaction (GST, Estimate & B2B Mechanic)
+ */
+export function generateMasterSalesDaybookExcel(
+  bills: Bill[],
+  b2bBills: B2BBill[],
+  settings: ShopSettings,
+  fromDate: string,
+  toDate: string
+): Uint8Array {
+  const wb = XLSX.utils.book_new();
+
+  const periodRetail = bills.filter(
+    b => b.invoice_date >= fromDate && b.invoice_date <= toDate && !b.is_cancelled
+  );
+  const periodB2B = b2bBills.filter(
+    b => b.bill_date >= fromDate && b.bill_date <= toDate
+  );
+
+  const rows: (string | number)[][] = [
+    [`MASTER SALES DAYBOOK / REGISTER — ${settings.shop_name}`],
+    [`Period: ${formatDateToDDMMMYYYY(fromDate)} to ${formatDateToDDMMMYYYY(toDate)} | GSTIN: ${settings.gstin}`],
+    [],
+    [
+      'Date',
+      'Voucher Type',
+      'Invoice / Bill #',
+      'Customer / Mechanic Name',
+      'Mobile',
+      'GSTIN',
+      'State Code',
+      'Taxable Value (₹)',
+      'CGST (₹)',
+      'SGST (₹)',
+      'Total Tax (₹)',
+      'Invoice Total (₹)',
+      'Payment Mode',
+      'Paid Amount (₹)',
+      'Due / Udhar (₹)',
+      'Items Summary'
+    ]
+  ];
+
+  let sumTaxable = 0;
+  let sumCgst = 0;
+  let sumSgst = 0;
+  let sumTotal = 0;
+  let sumPaid = 0;
+  let sumDue = 0;
+
+  // 1. Retail Invoices (GST & Estimates)
+  periodRetail.forEach(b => {
+    const isGst = b.bill_type === 'GST';
+    const txval = Math.round((b.taxable_value || 0) * 100) / 100;
+    const cgst = Math.round((b.cgst_amount || 0) * 100) / 100;
+    const sgst = Math.round((b.sgst_amount || 0) * 100) / 100;
+    const totTax = Math.round((cgst + sgst) * 100) / 100;
+    const itemsSummary = b.items.map(it => `${it.item_description} (${it.qty}x)`).join(', ');
+
+    sumTaxable += txval;
+    sumCgst += cgst;
+    sumSgst += sgst;
+    sumTotal += b.grand_total;
+    sumPaid += b.grand_total;
+
+    rows.push([
+      formatDateToDDMMMYYYY(b.invoice_date),
+      isGst ? 'GST Tax Invoice' : 'Retail Estimate',
+      b.invoice_num,
+      b.customer_name,
+      b.customer_mobile || '',
+      b.customer_gstin || '',
+      (b.customer_gstin && b.customer_gstin.length >= 2 ? b.customer_gstin.substring(0, 2) : settings.state_code),
+      txval,
+      cgst,
+      sgst,
+      totTax,
+      b.grand_total,
+      b.payment_mode || 'Cash',
+      b.grand_total,
+      0,
+      itemsSummary
+    ]);
+  });
+
+  // 2. B2B Mechanic Trade Bills
+  periodB2B.forEach(b => {
+    const itemsSummary = b.items.map(it => `${it.product_name} (${it.qty}x)`).join(', ');
+    const paid = b.paid_amount !== undefined ? b.paid_amount : b.total_amount;
+    const due = b.due_amount !== undefined ? b.due_amount : 0;
+
+    sumTaxable += b.total_amount;
+    sumTotal += b.total_amount;
+    sumPaid += paid;
+    sumDue += due;
+
+    rows.push([
+      formatDateToDDMMMYYYY(b.bill_date),
+      'B2B Mechanic Bill',
+      b.invoice_num,
+      b.mechanic_name || b.customer_name || 'Mechanic',
+      b.mechanic_phone || b.customer_mobile || '',
+      '',
+      settings.state_code,
+      b.total_amount,
+      0,
+      0,
+      0,
+      b.total_amount,
+      b.payment_method || 'Cash',
+      paid,
+      due,
+      itemsSummary
+    ]);
+  });
+
+  // Grand Total row
+  rows.push([]);
+  rows.push([
+    'TOTAL',
+    '',
+    `${periodRetail.length + periodB2B.length} Transactions`,
+    '',
+    '',
+    '',
+    '',
+    Math.round(sumTaxable * 100) / 100,
+    Math.round(sumCgst * 100) / 100,
+    Math.round(sumSgst * 100) / 100,
+    Math.round((sumCgst + sumSgst) * 100) / 100,
+    Math.round(sumTotal * 100) / 100,
+    '',
+    Math.round(sumPaid * 100) / 100,
+    Math.round(sumDue * 100) / 100,
+    ''
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales Register');
 
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }

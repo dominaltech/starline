@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { MessageCircle, X, Copy, Check, ExternalLink, Monitor, Globe } from 'lucide-react';
+import { X, Copy, Check, ExternalLink, Monitor, Globe } from 'lucide-react';
+import { WhatsAppIcon } from './WhatsAppIcon';
 import { openWhatsApp, WhatsAppTarget } from '../../utils/whatsapp';
 
 interface WhatsAppModalProps {
@@ -53,8 +54,8 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
-              <MessageCircle className="w-5 h-5 text-emerald-700" />
+            <div className="w-9 h-9 rounded-lg bg-[#25D366] text-white flex items-center justify-center shadow-xs">
+              <WhatsAppIcon className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">{title}</h3>

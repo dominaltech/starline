@@ -3,6 +3,7 @@ import { useDb } from '../../context/DbContext';
 import { AMCContract, AMCDuration, AMCStatus } from '../../types';
 import { formatDate, formatDateInput, formatCurrency } from '../../utils/formatters';
 import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
+import { WhatsAppIcon } from '../common/WhatsAppIcon';
 import {
   ShieldCheck,
   Plus,
@@ -517,9 +518,9 @@ export const AMCManager: React.FC = () => {
                           <button
                             onClick={() => handleWhatsAppReminder(contract)}
                             title="Send WhatsApp Expiry / Renewal Reminder"
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200"
+                            className="p-1.5 text-white bg-[#25D366] hover:bg-[#20ba59] rounded-lg transition-all shadow-xs hover:scale-105 active:scale-95 flex items-center justify-center"
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <WhatsAppIcon className="w-4 h-4" />
                           </button>
 
                           {/* Renew Button */}

@@ -50,10 +50,17 @@ const STORAGE_KEYS = {
 };
 
 class StorageEngine {
+  private memCache = new Map<string, unknown>();
+
   private get<T>(key: string, defaultVal: T): T {
+    if (this.memCache.has(key)) {
+      return this.memCache.get(key) as T;
+    }
     try {
       const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : defaultVal;
+      const parsed = data ? (JSON.parse(data) as T) : defaultVal;
+      this.memCache.set(key, parsed);
+      return parsed;
     } catch (e) {
       console.error(`Error reading ${key} from storage:`, e);
       return defaultVal;
@@ -61,11 +68,16 @@ class StorageEngine {
   }
 
   private set<T>(key: string, value: T): void {
+    this.memCache.set(key, value);
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (e) {
       console.error(`Error saving ${key} to storage:`, e);
     }
+  }
+
+  public invalidateCache(): void {
+    this.memCache.clear();
   }
 
   // --- INITIALIZATION ---
@@ -1035,6 +1047,7 @@ class StorageEngine {
 
   public importFullBackup(data: Record<string, unknown>): boolean {
     try {
+      this.invalidateCache();
       if (data.settings) this.set(STORAGE_KEYS.SETTINGS, data.settings);
       if (data.users) this.set(STORAGE_KEYS.USERS, data.users);
       if (data.sections) this.set(STORAGE_KEYS.SECTIONS, data.sections);
@@ -1058,6 +1071,7 @@ class StorageEngine {
 
 
   public clearAndReset(): void {
+    this.invalidateCache();
     localStorage.clear();
     this.init();
   }
