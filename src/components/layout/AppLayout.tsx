@@ -9,6 +9,7 @@ import { BillHistory } from '../billing/BillHistory';
 import { CustomerList } from '../customers/CustomerList';
 import { UdharKhataManager } from '../udhar/UdharKhataManager';
 import { ServicesManager } from '../services/ServicesManager';
+import { AMCManager } from '../amc/AMCManager';
 import { NotesManager } from '../notes/NotesManager';
 import { ProductList } from '../inventory/ProductList';
 import { RackSectionView } from '../inventory/RackSectionView';
@@ -48,7 +49,7 @@ export const AppLayout: React.FC = () => {
         totalEstimatedValue += lineTotal;
 
         return (
-          `${idx + 1}. ${p.name}${p.sku ? ` [SKU: ${p.sku}]` : ''}\n` +
+          `${idx + 1}. ${p.name}${p.type || p.sku ? ` [${p.type || p.sku}]` : ''}\n` +
           `   • Current Stock: ${p.stock_qty} ${p.unit} (Min Threshold: ${minAlert} ${p.unit})\n` +
           `   • Reorder Qty: ${reorderQty} ${p.unit} | Approx Rate: ₹${estPrice}\n` +
           `   • Line Total: ₹${lineTotal.toFixed(2)}`
@@ -87,6 +88,8 @@ export const AppLayout: React.FC = () => {
         return t('nav_udhar');
       case 'services':
         return t('nav_services');
+      case 'amc':
+        return t('nav_amc');
       case 'notes':
         return t('nav_notes');
       case 'inventory':
@@ -133,6 +136,7 @@ export const AppLayout: React.FC = () => {
           {activeTab === 'customers' && <CustomerList />}
           {activeTab === 'udhar' && <UdharKhataManager />}
           {activeTab === 'services' && <ServicesManager />}
+          {activeTab === 'amc' && <AMCManager />}
           {activeTab === 'notes' && (
             <NotesManager
               initialContent={prefilledNoteContent}

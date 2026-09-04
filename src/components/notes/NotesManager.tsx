@@ -1,27 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useDb } from '../../context/DbContext';
 import { AppNote, Product } from '../../types';
 import { formatDate } from '../../utils/formatters';
 import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
-import { WhatsAppModal } from '../common/WhatsAppModal';
-import { interpolateTemplate } from '../../utils/whatsapp';
 import {
   ClipboardList,
   Plus,
   Trash2,
-  Save,
-  MessageCircle,
+  Edit2,
   Search,
   Package,
-  Truck,
-  Globe,
   X,
+  Camera,
+  Image as ImageIcon,
+  CheckCircle2,
+  Eye,
+  Tag,
   Clock,
   Sparkles,
-  ArrowRight,
-  CheckCircle2,
-  Eraser,
-  Check
+  Layers,
+  Upload
 } from 'lucide-react';
 
 interface NotesManagerProps {
@@ -36,33 +34,46 @@ export const NotesManager: React.FC<NotesManagerProps> = ({
   const {
     appNotes,
     products,
-    settings,
     saveAppNote,
-    deleteAppNote,
-    acknowledgeStockAlerts
+    deleteAppNote
   } = useDb();
 
-  const [notesSearch, setNotesSearch] = useState<string>('');
-  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Active Note Editor State
+  // Modals
+  const [showEditorModal, setShowEditorModal] = useState<boolean>(false);
+  const [viewingNote, setViewingNote] = useState<AppNote | null>(null);
+  const [editingNote, setEditingNote] = useState<AppNote | null>(null);
+
+  // Editor Form Fields
   const [title, setTitle] = useState<string>('');
   const [content, setContent] = useState<string>('');
-  const [noteType, setNoteType] = useState<'GENERAL' | 'ORDER'>('GENERAL');
-  const [productRefs, setProductRefs] = useState<string[]>([]);
+  const [imageData, setImageData] = useState<string | undefined>(undefined);
+  const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);
+  const [selectedProductName, setSelectedProductName] = useState<string | undefined>(undefined);
 
-  // Feedback & Save State
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState<{ title: string; subtitle?: string } | null>(null);
-  const [isModified, setIsModified] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Product Search for Quick Insertion
-  const [partSearchQuery, setPartSearchQuery] = useState<string>('');
+  // If initialContent was passed from low stock alert, trigger new note
+  React.useEffect(() => {
+    if (initialContent) {
+      setEditingNote(null);
+      setTitle('Inventory Reorder List');
+      setContent(initialContent);
+      setImageData(undefined);
+      setSelectedProductId(undefined);
+      setSelectedProductName(undefined);
+      setShowEditorModal(true);
+      if (onClearInitialContent) onClearInitialContent();
+    }
+  }, [initialContent, onClearInitialContent]);
 
-  const productOptions = React.useMemo<ComboboxOption[]>(() => {
+  // Product Combobox Options
+  const productOptions = useMemo<ComboboxOption[]>(() => {
     return products.map((p) => ({
       id: p.id,
       label: p.name,
-      subLabel: `${p.sku ? `[${p.sku}] ` : ''}Stock: ${p.stock_qty} ${p.unit} (Min: ${p.min_stock_alert || 5})`,
+      subLabel: `${p.type || p.sku ? `[${p.type || p.sku}] ` : ''}Stock: ${p.stock_qty} ${p.unit}`,
       badge: `₹${p.selling_price}`,
       badgeColor:
         p.stock_qty <= (p.min_stock_alert || 5)
@@ -72,770 +83,552 @@ export const NotesManager: React.FC<NotesManagerProps> = ({
     }));
   }, [products]);
 
-  // Send to Dealer WhatsApp Modal
-  const [showDealerModal, setShowDealerModal] = useState<boolean>(false);
-  const [selectedDealerId, setSelectedDealerId] = useState<string>('');
-  const [dealerMsgLang, setDealerMsgLang] = useState<'mr' | 'hi' | 'en'>('mr');
-  const [waModalData, setWaModalData] = useState<{
-    isOpen: boolean;
-    name: string;
-    phone: string;
-    message: string;
-  } | null>(null);
-
-  // Helper to build rich structured order template from low stock items
-  const buildLowStockOrderText = (items: Product[]): string => {
-    const todayDate = formatDate(new Date().toISOString());
-    let totalEst = 0;
-
-    const lines = items
-      .map((p, idx) => {
-        const minAlert = p.min_stock_alert || 5;
-        const reorderQty = Math.max(5, minAlert * 2 - p.stock_qty);
-        const estPrice = p.buy_price || p.selling_price || 0;
-        const lineTotal = reorderQty * estPrice;
-        totalEst += lineTotal;
-
-        return (
-          `${idx + 1}. ${p.name}${p.sku ? ` [SKU: ${p.sku}]` : ''}\n` +
-          `   • Current In-Stock: ${p.stock_qty} ${p.unit} (Min Threshold: ${minAlert} ${p.unit})\n` +
-          `   • Suggested Reorder Qty: ${reorderQty} ${p.unit} | Approx Rate: ₹${estPrice}\n` +
-          `   • Line Total: ₹${lineTotal.toFixed(2)}`
-        );
-      })
-      .join('\n\n');
-
-    return (
-      `======================================================\n` +
-      `STAR LINE SERVICES — LOW STOCK PURCHASE ORDER\n` +
-      `Date: ${todayDate} | Status: Order Prepared for Supplier\n` +
-      `======================================================\n\n` +
-      `ITEMS TO REORDER:\n\n` +
-      `${lines}\n\n` +
-      `------------------------------------------------------\n` +
-      `Total Line Items: ${items.length}\n` +
-      `Estimated Order Total: ₹${totalEst.toFixed(2)}\n` +
-      `Delivery Note: Urgent express delivery requested.\n` +
-      `======================================================`
-    );
+  const handleOpenNewModal = () => {
+    setEditingNote(null);
+    setTitle('');
+    setContent('');
+    setImageData(undefined);
+    setSelectedProductId(undefined);
+    setSelectedProductName(undefined);
+    setShowEditorModal(true);
   };
 
-  // If initialContent provided (from Low Stock Alert click in TopBar), auto-create new Order Note
-  useEffect(() => {
-    if (initialContent && initialContent.trim().length > 0) {
-      const newId = 'note_' + Date.now();
-      const lowStockIds = products
-        .filter((p) => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5))
-        .map((p) => p.id);
+  const handleOpenEditModal = (note: AppNote) => {
+    setEditingNote(note);
+    setTitle(note.title);
+    setContent(note.content);
+    setImageData(note.image_data);
+    setSelectedProductId(note.product_id);
+    setSelectedProductName(note.product_name);
+    setViewingNote(null);
+    setShowEditorModal(true);
+  };
 
-      const newNote: AppNote = {
-        id: newId,
-        title: `Low Stock Spares Order — ${formatDate(new Date().toISOString())}`,
-        content: initialContent,
-        product_refs: lowStockIds,
-        note_type: 'ORDER',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+  // Image Upload handler (resizes to max 1200px width/height and compresses to JPEG to keep localStorage fast)
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          setImageData(compressedDataUrl);
+        }
       };
-
-      saveAppNote(newNote);
-      setActiveNoteId(newId);
-      setTitle(newNote.title);
-      setContent(newNote.content);
-      setNoteType('ORDER');
-      setProductRefs(lowStockIds);
-      setIsModified(false);
-
-      // Dismiss low stock alert since user opened order note
-      if (lowStockIds.length > 0) {
-        acknowledgeStockAlerts(lowStockIds);
+      if (event.target?.result) {
+        img.src = event.target.result as string;
       }
-
-      setSaveSuccessMsg({
-        title: '✓ Low Stock Spares Pre-filled & Note Created!',
-        subtitle: 'Low stock alert notification in TopBar has been dismissed.'
-      });
-      setTimeout(() => setSaveSuccessMsg(null), 5000);
-
-      if (onClearInitialContent) onClearInitialContent();
-    }
-  }, [initialContent]);
-
-  const hasInitializedRef = useRef<boolean>(false);
-
-  // Set initial active note ONLY once on initial mount if notes exist
-  useEffect(() => {
-    if (!hasInitializedRef.current && appNotes.length > 0 && !initialContent && !activeNoteId) {
-      hasInitializedRef.current = true;
-      const first = appNotes[0];
-      setActiveNoteId(first.id);
-      setTitle(first.title);
-      setContent(first.content);
-      setNoteType(first.note_type || 'GENERAL');
-      setProductRefs(first.product_refs || []);
-      setIsModified(false);
-    }
-  }, [appNotes, activeNoteId, initialContent]);
-
-  // Handle Note Switching from left list
-  const handleSelectNote = (n: AppNote) => {
-    hasInitializedRef.current = true;
-    setActiveNoteId(n.id);
-    setTitle(n.title);
-    setContent(n.content);
-    setNoteType(n.note_type || 'GENERAL');
-    setProductRefs(n.product_refs || []);
-    setIsModified(false);
-    setSaveSuccessMsg(null);
+    };
+    reader.readAsDataURL(file);
+    // Reset file input so user can pick the same file again if desired
+    e.target.value = '';
   };
 
-  // Create New Note
-  const handleCreateNewNote = (type: 'GENERAL' | 'ORDER' = 'GENERAL') => {
-    hasInitializedRef.current = true;
-    const isOrder = type === 'ORDER';
-    let defaultContent = '';
-    let defaultRefs: string[] = [];
+  const handleRemoveImage = () => {
+    setImageData(undefined);
+  };
 
-    if (isOrder) {
-      // Find low stock items or lowest 3 items
-      let itemsToOrder = products.filter(
-        (p) => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5)
-      );
-      if (itemsToOrder.length === 0) {
-        itemsToOrder = [...products].sort((a, b) => a.stock_qty - b.stock_qty).slice(0, 3);
-      }
-      defaultContent = buildLowStockOrderText(itemsToOrder);
-      defaultRefs = itemsToOrder.map((p) => p.id);
+  const handleSaveNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      alert('Please enter a note title.');
+      return;
     }
 
-    const newId = 'note_' + Date.now();
     const newNote: AppNote = {
-      id: newId,
-      title: isOrder
-        ? `Wholesale Purchase Order — ${formatDate(new Date().toISOString())}`
-        : 'New Note',
-      content: defaultContent,
-      product_refs: defaultRefs,
-      note_type: type,
-      created_at: new Date().toISOString(),
+      id: editingNote ? editingNote.id : 'note_' + Date.now(),
+      title: title.trim(),
+      content: content.trim(),
+      note_type: 'GENERAL',
+      product_refs: selectedProductId ? [selectedProductId] : [],
+      image_data: imageData,
+      product_id: selectedProductId,
+      product_name: selectedProductName,
+      created_at: editingNote ? editingNote.created_at : new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
     saveAppNote(newNote);
-    setActiveNoteId(newId);
-    setTitle(newNote.title);
-    setContent(newNote.content);
-    setNoteType(type);
-    setProductRefs(defaultRefs);
-    setIsModified(false);
+    setShowEditorModal(false);
+  };
 
-    if (isOrder && defaultRefs.length > 0) {
-      acknowledgeStockAlerts(defaultRefs);
+  const handleDeleteNote = (id: string, noteTitle: string) => {
+    if (window.confirm(`Are you sure you want to delete note "${noteTitle}"?`)) {
+      deleteAppNote(id);
+      if (viewingNote?.id === id) {
+        setViewingNote(null);
+      }
     }
+  };
 
-    setSaveSuccessMsg({
-      title: isOrder ? '✓ Order Pad Created with Product Details!' : '✓ New Note Created',
-      subtitle: isOrder ? 'All product stock & order quantities pre-filled.' : undefined
+  // Filter notes by search query
+  const filteredNotes = useMemo(() => {
+    return appNotes.filter((note) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        note.title.toLowerCase().includes(q) ||
+        note.content.toLowerCase().includes(q) ||
+        (note.product_name && note.product_name.toLowerCase().includes(q))
+      );
     });
-    setTimeout(() => setSaveSuccessMsg(null), 4000);
-  };
-
-  // Clear current editor box completely
-  const handleClearBox = () => {
-    hasInitializedRef.current = true;
-    setTitle('');
-    setContent('');
-    setNoteType('GENERAL');
-    setProductRefs([]);
-    setActiveNoteId(null);
-    setIsModified(false);
-    setSaveSuccessMsg({
-      title: '✓ Box Cleared! Ready for new note.',
-      subtitle: 'Type your title and details, then click Save.'
-    });
-    setTimeout(() => setSaveSuccessMsg(null), 4000);
-  };
-
-  // Save Note - saves to database/list and clears the editor box so it never stays stuck
-  const handleSaveCurrentNote = (keepOpen = false) => {
-    if (!title.trim() && !content.trim()) {
-      alert('Please enter a note title or content before saving.');
-      return;
-    }
-
-    const current = appNotes.find((n) => n.id === activeNoteId);
-    const targetId = activeNoteId || 'note_' + Date.now();
-
-    const updated: AppNote = {
-      id: targetId,
-      title: title.trim() || 'Untitled Note',
-      content: content,
-      note_type: noteType,
-      product_refs: productRefs,
-      created_at: current?.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    saveAppNote(updated);
-
-    // If this was an order note or low stock note, dismiss TopBar alert
-    if (noteType === 'ORDER' || productRefs.length > 0) {
-      acknowledgeStockAlerts(productRefs);
-    }
-
-    hasInitializedRef.current = true;
-
-    if (keepOpen) {
-      setActiveNoteId(targetId);
-      setIsModified(false);
-      setSaveSuccessMsg({
-        title: '✓ Note Saved to Database!',
-        subtitle: `Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-      });
-    } else {
-      // Immediately clear the box so text does not stay stuck pre-filled
-      setTitle('');
-      setContent('');
-      setActiveNoteId(null);
-      setNoteType('GENERAL');
-      setProductRefs([]);
-      setIsModified(false);
-      setSaveSuccessMsg({
-        title: '✓ Note Saved to List & Box Cleared!',
-        subtitle: 'Your note is saved in the left list. The editor is clean and ready for your next note.'
-      });
-    }
-
-    setTimeout(() => setSaveSuccessMsg(null), 5000);
-  };
-
-  // Delete Active Note
-  const handleDeleteCurrentNote = () => {
-    if (!activeNoteId) return;
-    const confirm = window.confirm('Are you sure you want to delete this note?');
-    if (confirm) {
-      deleteAppNote(activeNoteId);
-      setActiveNoteId(null);
-      setTitle('');
-      setContent('');
-      setIsModified(false);
-      setSaveSuccessMsg(null);
-    }
-  };
-
-  const insertProductIntoNote = (p: Product) => {
-    const minAlert = p.min_stock_alert || 5;
-    const recQty = Math.max(5, minAlert * 2 - p.stock_qty);
-    const estPrice = p.buy_price || p.selling_price || 0;
-    const lineTotal = recQty * estPrice;
-
-    const formattedLine =
-      `\n• ${p.name}${p.sku ? ` [${p.sku}]` : ''} | Current Stock: ${p.stock_qty} ${p.unit} (Min: ${minAlert} ${p.unit})` +
-      ` | Order Qty: ${recQty} ${p.unit} @ ₹${estPrice} = ₹${lineTotal}`;
-
-    setContent((prev) => prev + formattedLine);
-    setProductRefs((prev) => Array.from(new Set([...prev, p.id])));
-    setPartSearchQuery('');
-    setIsModified(true);
-  };
-
-  // Auto insert all low stock products button
-  const handleAutoInsertAllLowStock = () => {
-    let items = products.filter(
-      (p) => p.stock_qty <= (p.min_stock_alert !== undefined ? p.min_stock_alert : 5)
-    );
-    if (items.length === 0) {
-      items = [...products].sort((a, b) => a.stock_qty - b.stock_qty).slice(0, 3);
-    }
-
-    const newContent = buildLowStockOrderText(items);
-    setContent(newContent);
-    setNoteType('ORDER');
-    setProductRefs(items.map((p) => p.id));
-    setIsModified(true);
-
-    setSaveSuccessMsg({
-      title: `✓ Auto-inserted ${items.length} Low Stock Catalog Items!`,
-      subtitle: 'Review order quantities and click Save.'
-    });
-    setTimeout(() => setSaveSuccessMsg(null), 4000);
-  };
-
-  // WhatsApp Dealer Message Builder using configurable templates from Settings
-  const buildDealerOrderMessage = (lang: 'mr' | 'hi' | 'en'): string => {
-    const shopName = settings.shop_name;
-    const date = formatDate(new Date().toISOString());
-
-    let template = settings.msg_template_order_en || '';
-    if (lang === 'mr') {
-      template = settings.msg_template_order_mr || template;
-    } else if (lang === 'hi') {
-      template = settings.msg_template_order_hi || template;
-    }
-
-    return interpolateTemplate(template, {
-      shop_name: shopName,
-      date: date,
-      mobiles: settings.mobiles,
-      content: content
-    });
-  };
-
-  const handleSendToDealer = () => {
-    const dealer = (settings.dealers || []).find((d) => d.id === selectedDealerId);
-    if (!dealer) {
-      alert('Please select a wholesale dealer from the list.');
-      return;
-    }
-
-    const msg = buildDealerOrderMessage(dealerMsgLang);
-    setShowDealerModal(false);
-
-    // Acknowledge stock alert when sent to dealer
-    if (productRefs.length > 0) {
-      acknowledgeStockAlerts(productRefs);
-    }
-
-    setWaModalData({
-      isOpen: true,
-      name: dealer.name,
-      phone: dealer.phone,
-      message: msg
-    });
-  };
-
-  // Filtered Notes List
-  const filteredNotes = appNotes.filter((n) => {
-    if (!notesSearch.trim()) return true;
-    const q = notesSearch.toLowerCase().trim();
-    return n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q);
-  });
+  }, [appNotes, searchQuery]);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-2.5 pb-2">
-      {/* Top Banner - Slim Single Row */}
-      <div className="bg-white px-4 py-2.5 rounded-lg border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-900 flex items-center justify-center shrink-0">
-            <ClipboardList className="w-5 h-5" />
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs">
+            <ClipboardList className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-900 leading-tight">Notes &amp; Purchase Order Pad</h2>
-            <p className="text-[11px] text-slate-500">
-              Workshop notepad, low-stock order auto-fill, and one-click WhatsApp dispatch to suppliers.
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
+              Visual Notes & Photo Memo
+            </h1>
+            <p className="text-sm text-slate-500">
+              Capture quick notes, upload part slips or photo memos, and link catalog items.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleCreateNewNote('ORDER')}
-            className="btn-secondary text-xs py-1.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 font-bold flex items-center gap-1.5 shadow-2xs"
-            title="Auto-fills low stock catalog items into an order note"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-            <span>+ What to Order Pad</span>
-          </button>
+        <button
+          onClick={handleOpenNewModal}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white rounded-xl font-medium shadow-sm transition-colors text-sm"
+        >
+          <Plus className="w-4 h-4" />
+          <span>New Visual Note</span>
+        </button>
+      </div>
 
-          <button
-            onClick={() => handleCreateNewNote('GENERAL')}
-            className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ New Blank Note</span>
-          </button>
+      {/* Search Bar & Stats */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+          <Layers className="w-4 h-4 text-purple-600" />
+          <span>Total Notes: {appNotes.length}</span>
+          <span className="text-slate-300">•</span>
+          <span>With Photos: {appNotes.filter((n) => !!n.image_data).length}</span>
+          <span className="text-slate-300">•</span>
+          <span>Linked to Products: {appNotes.filter((n) => !!n.product_name).length}</span>
+        </div>
+
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search notes, slips, products..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
+          />
         </div>
       </div>
 
-      {/* Two-Column Notepad Workspace (Single-Screen Fit) */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
-        {/* Left Column: Notes List (4 cols) */}
-        <div className="md:col-span-4 bg-white rounded-lg border border-slate-200 shadow-xs p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-800">Saved Notes ({appNotes.length})</span>
+      {/* Notes Grid */}
+      {filteredNotes.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs">
+          <div className="w-16 h-16 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center mx-auto mb-3">
+            <ClipboardList className="w-8 h-8" />
+          </div>
+          <h3 className="text-base font-semibold text-slate-700">No Notes Found</h3>
+          <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
+            {searchQuery
+              ? 'No notes match your search keywords.'
+              : 'Add photo slips, mechanic requests, or general work memos.'}
+          </p>
+          {!searchQuery && (
             <button
-              onClick={() => handleCreateNewNote('GENERAL')}
-              className="text-[11px] font-bold text-blue-900 hover:underline flex items-center gap-1"
+              onClick={handleOpenNewModal}
+              className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium transition-colors"
             >
-              <Plus className="w-3 h-3" />
-              <span>New</span>
+              Create First Note
             </button>
-          </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredNotes.map((note) => {
+            const linkedProd = products.find((p) => p.id === note.product_id);
 
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search notes..."
-              value={notesSearch}
-              onChange={(e) => setNotesSearch(e.target.value)}
-              className="input-field pl-8 text-xs py-1 font-medium"
-            />
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
-          </div>
-
-          <div className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
-            {filteredNotes.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-xs italic">
-                No saved notes. Click &quot;+ What to Order Pad&quot; to begin.
-              </div>
-            ) : (
-              filteredNotes.map((n) => {
-                const isActive = n.id === activeNoteId;
-                const isOrder = n.note_type === 'ORDER';
-
-                return (
-                  <div
-                    key={n.id}
-                    onClick={() => handleSelectNote(n)}
-                    className={`p-2.5 rounded-lg border cursor-pointer transition-all ${
-                      isActive
-                        ? 'bg-blue-50/90 border-blue-900 shadow-xs ring-1 ring-blue-900/20'
-                        : 'bg-white hover:bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start gap-1">
-                      <h4
-                        className={`text-xs font-bold truncate flex-1 ${
-                          isActive ? 'text-blue-950' : 'text-slate-800'
-                        }`}
-                      >
-                        {n.title || 'Untitled Note'}
-                      </h4>
-                      {isOrder && (
-                        <span className="text-[9px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded shrink-0">
-                          ORDER
-                        </span>
-                      )}
+            return (
+              <div
+                key={note.id}
+                onClick={() => setViewingNote(note)}
+                className="group bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-purple-200 transition-all duration-200 flex flex-col overflow-hidden cursor-pointer"
+              >
+                {/* Image Section (Bigger thumbnail) */}
+                <div className="relative w-full h-48 bg-slate-100 overflow-hidden flex items-center justify-center border-b border-slate-100">
+                  {note.image_data ? (
+                    <img
+                      src={note.image_data}
+                      alt={note.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-300">
+                      <ImageIcon className="w-12 h-12 mb-1" />
+                      <span className="text-xs font-medium text-slate-400">No Photo Attached</span>
                     </div>
+                  )}
 
-                    <p className="text-[10.5px] text-slate-500 line-clamp-2 mt-0.5 font-mono">
-                      {n.content || '(Empty note)'}
+                  {/* Click to Zoom Overlay Indicator */}
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 text-xs font-medium">
+                    <Eye className="w-4 h-4" />
+                    <span>Click to View Full</span>
+                  </div>
+
+                  {/* Date Badge */}
+                  <div className="absolute top-2.5 right-2.5 px-2 py-1 rounded-md text-[10px] font-semibold bg-black/60 text-white backdrop-blur-xs flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    <span>{formatDate(note.created_at)}</span>
+                  </div>
+                </div>
+
+                {/* Card Body */}
+                <div className="p-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    {/* Linked Product Pill */}
+                    {note.product_name && (
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100 mb-2.5 max-w-full truncate">
+                        <Package className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{note.product_name}</span>
+                        {linkedProd?.type && (
+                          <span className="text-[10px] bg-purple-200/70 text-purple-800 px-1 rounded shrink-0">
+                            {linkedProd.type}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Note Title */}
+                    <h3 className="font-bold text-slate-800 text-base line-clamp-1 group-hover:text-purple-600 transition-colors">
+                      {note.title}
+                    </h3>
+
+                    {/* Content Snippet */}
+                    <p className="text-xs text-slate-500 mt-1.5 line-clamp-3 whitespace-pre-line leading-relaxed">
+                      {note.content || 'No text description entered.'}
                     </p>
+                  </div>
 
-                    <div className="text-[9.5px] text-slate-400 mt-1.5 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{formatDate(n.updated_at || n.created_at)}</span>
-                      </span>
-                      {isActive && (
-                        <span className="text-emerald-700 font-bold text-[9.5px] flex items-center gap-0.5">
-                          <Check className="w-3 h-3" />
-                          <span>Active</span>
-                        </span>
-                      )}
+                  {/* Card Bottom Actions */}
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-xs text-slate-400">
+                    <span className="text-[11px]">Click card to view details</span>
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleOpenEditModal(note)}
+                        title="Edit Note"
+                        className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteNote(note.id, note.title)}
+                        title="Delete Note"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Active Note Editor (8 cols) */}
-        <div className="md:col-span-8 bg-white rounded-lg border border-slate-200 shadow-xs p-3.5 space-y-2.5">
-          {/* Prominent Success Notification Banner */}
-          {saveSuccessMsg && (
-            <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center justify-between animate-fadeIn shadow-xs">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <div>
-                  <div className="text-xs font-bold text-emerald-950">{saveSuccessMsg.title}</div>
-                  {saveSuccessMsg.subtitle && (
-                    <div className="text-[10.5px] text-emerald-700 font-medium">{saveSuccessMsg.subtitle}</div>
-                  )}
                 </div>
               </div>
-              <button
-                onClick={() => setSaveSuccessMsg(null)}
-                className="text-emerald-600 hover:text-emerald-900 p-1 text-xs font-bold cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          {/* Note Header: Title, Type Selector & Status Pill */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-2">
-            <div className="flex-1 w-full">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Note Title
-                </span>
-                {isModified ? (
-                  <span className="text-[9.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    <span>Unsaved Changes</span>
-                  </span>
-                ) : activeNoteId ? (
-                  <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>Loaded from Database</span>
-                  </span>
-                ) : null}
-              </div>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  setIsModified(true);
-                }}
-                placeholder="Enter note or order title (e.g. Balaji Spares Order - AC Parts)..."
-                className="w-full text-sm font-bold text-slate-900 focus:outline-none focus:ring-0 border-b border-transparent hover:border-slate-300 focus:border-blue-900 pb-0.5"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 self-end sm:self-auto">
-              <select
-                value={noteType}
-                onChange={(e) => {
-                  setNoteType(e.target.value as 'GENERAL' | 'ORDER');
-                  setIsModified(true);
-                }}
-                className="text-xs font-bold border border-slate-300 rounded px-2 py-1 bg-white cursor-pointer"
-              >
-                <option value="GENERAL">General Note</option>
-                <option value="ORDER">Dealer Purchase Order</option>
-              </select>
-
-              {activeNoteId && (
-                <button
-                  type="button"
-                  onClick={handleDeleteCurrentNote}
-                  className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
-                  title="Delete Note"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Textarea Editor with Auto-Insert Low Stock Button */}
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-[10.5px] font-semibold text-slate-600">
-                Note Details &amp; Reorder Specifications:
-              </label>
-              <button
-                type="button"
-                onClick={handleAutoInsertAllLowStock}
-                className="text-[10.5px] font-bold text-blue-900 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs transition-colors cursor-pointer"
-                title="Inserts all low-stock products from catalog into this note"
-              >
-                <Sparkles className="w-3 h-3 text-amber-600" />
-                <span>Auto-Insert Low Stock Spares</span>
-              </button>
-            </div>
-            <textarea
-              rows={7}
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                setIsModified(true);
-              }}
-              placeholder="Write items to reorder, pending work, or workshop reminders here..."
-              className="input-field font-mono text-xs leading-relaxed resize-y bg-slate-50/50 p-2.5"
-            />
-          </div>
-
-          {/* Quick Spares Insertion Search Bar with Dropdown Chevron */}
-          <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-slate-700 flex items-center gap-1.5 text-[11px]">
-                <Package className="w-3.5 h-3.5 text-blue-900" />
-                <span>Search Catalog to Auto-Insert Part into Note</span>
-              </span>
-              <span className="text-[10.5px] text-slate-400">
-                Click ▼ to browse all catalog spares
-              </span>
-            </div>
-
-            <SearchableCombobox
-              value={partSearchQuery}
-              onChange={setPartSearchQuery}
-              onSelectOption={(opt) => {
-                if (opt.data) insertProductIntoNote(opt.data);
-                setPartSearchQuery('');
-              }}
-              options={productOptions}
-              placeholder="Type part name or click ▼ for all catalog spares..."
-              inputClassName="text-xs font-semibold py-1 px-2"
-            />
-          </div>
-
-          {/* Bottom Action Bar: Save Note clears box, Save & Keep Editing keeps open */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2 border-t border-slate-200">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleClearBox}
-                className="btn-secondary text-xs px-3 py-1.5 text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
-                title="Clear current box to start a new note"
-              >
-                <Eraser className="w-3.5 h-3.5" />
-                <span>Clear Box / New Note</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Save & Keep Editing (Optional if continuing to draft) */}
-              <button
-                type="button"
-                onClick={() => handleSaveCurrentNote(true)}
-                className="btn-secondary text-xs px-3 py-1.5 text-slate-700 border-slate-300 font-semibold flex items-center gap-1 bg-white hover:bg-slate-50 cursor-pointer"
-                title="Saves to database and keeps editor open"
-              >
-                <span>Save &amp; Keep Open</span>
-              </button>
-
-              {/* Primary Save Note Button (Saves and cleans the box ready for next note!) */}
-              <button
-                type="button"
-                onClick={() => handleSaveCurrentNote(false)}
-                className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1.5 bg-[#0F2942] hover:bg-[#1e3a5f] cursor-pointer shadow-xs"
-                title="Saves note to list on left and clears box for next note"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Note</span>
-              </button>
-
-              {/* Send to Dealer WhatsApp Button */}
-              <button
-                type="button"
-                onClick={() => setShowDealerModal(true)}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                title="Dispatch this purchase order directly to dealer via WhatsApp"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span>Send WhatsApp</span>
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      </div>
+      )}
 
-      {/* Dealer WhatsApp Modal */}
-      {showDealerModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Truck className="w-4 h-4 text-blue-900" />
-                <span>Send Purchase Order to Wholesale Dealer</span>
-              </h3>
+      {/* High-Resolution View Note Popup Modal */}
+      {viewingNote && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl my-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+            {/* Header */}
+            <div className="flex justify-between items-start pb-4 border-b border-slate-200 shrink-0">
+              <div className="flex-1 pr-4">
+                <div className="flex items-center gap-2 text-xs font-semibold text-purple-600 mb-1">
+                  <ClipboardList className="w-4 h-4" />
+                  <span>Visual Note Details</span>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-slate-500 font-normal">{formatDate(viewingNote.created_at)}</span>
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 break-words">{viewingNote.title}</h2>
+              </div>
               <button
-                type="button"
-                onClick={() => setShowDealerModal(false)}
-                className="text-slate-400 hover:text-slate-700"
+                onClick={() => setViewingNote(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-full transition-colors shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Select Dealer Dropdown */}
-            <div className="space-y-1.5 text-xs">
-              <label className="block font-semibold text-slate-700">
-                Select Wholesaler / Dealer *
-              </label>
-              {(settings.dealers || []).length === 0 ? (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-900 text-xs">
-                  No dealers added yet. Please add supplier contacts in <strong>Settings → Wholesale Dealers</strong>.
+            {/* Scrollable Content */}
+            <div className="overflow-y-auto flex-1 py-4 space-y-4">
+              {/* Image Preview (High Res) */}
+              {viewingNote.image_data ? (
+                <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center max-h-[420px]">
+                  <img
+                    src={viewingNote.image_data}
+                    alt={viewingNote.title}
+                    className="max-h-[420px] w-auto max-w-full object-contain"
+                  />
                 </div>
               ) : (
-                <select
-                  value={selectedDealerId}
-                  onChange={(e) => setSelectedDealerId(e.target.value)}
-                  className="input-field font-bold text-xs cursor-pointer"
-                >
-                  <option value="">-- Select Supplier / Dealer --</option>
-                  {(settings.dealers || []).map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} (+91 {d.phone}) {d.specialization ? `— ${d.specialization}` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 text-center text-slate-400 text-xs">
+                  No image attached to this note.
+                </div>
               )}
-            </div>
 
-            {/* Language Selector */}
-            <div className="space-y-1.5 text-xs">
-              <label className="block font-semibold text-slate-700 flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-blue-900" />
-                <span>WhatsApp Message Language</span>
-              </label>
-              <div className="flex bg-slate-100 rounded border border-slate-200 p-1 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setDealerMsgLang('mr')}
-                  className={`flex-1 py-1.5 rounded text-xs font-bold transition-all ${
-                    dealerMsgLang === 'mr' ? 'bg-[#0F2942] text-white shadow-2xs' : 'text-slate-700'
-                  }`}
-                >
-                  मराठी (Marathi)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDealerMsgLang('hi')}
-                  className={`flex-1 py-1.5 rounded text-xs font-bold transition-all ${
-                    dealerMsgLang === 'hi' ? 'bg-[#0F2942] text-white shadow-2xs' : 'text-slate-700'
-                  }`}
-                >
-                  हिंदी (Hindi)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDealerMsgLang('en')}
-                  className={`flex-1 py-1.5 rounded text-xs font-bold transition-all ${
-                    dealerMsgLang === 'en' ? 'bg-[#0F2942] text-white shadow-2xs' : 'text-slate-700'
-                  }`}
-                >
-                  English
-                </button>
+              {/* Linked Product Information Card */}
+              {viewingNote.product_name && (
+                <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                      <Package className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide">
+                        Linked Catalog Product
+                      </div>
+                      <div className="font-bold text-slate-800 text-sm">{viewingNote.product_name}</div>
+                      {(() => {
+                        const p = products.find((prod) => prod.id === viewingNote.product_id);
+                        if (!p) return null;
+                        return (
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {p.type && <span className="font-semibold text-purple-600">[{p.type}] </span>}
+                            Stock: <span className="font-semibold">{p.stock_qty} {p.unit}</span> • Price: <span className="font-semibold">₹{p.selling_price}</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Note Content */}
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  Note Details
+                </div>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-800 whitespace-pre-line leading-relaxed font-mono select-text">
+                  {viewingNote.content || '(No additional text)'}
+                </div>
               </div>
             </div>
 
-            {/* Message Preview Box */}
-            <div className="space-y-1 text-xs">
-              <label className="block font-semibold text-slate-600">WhatsApp Preview</label>
-              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg text-emerald-950 font-mono text-[11px] whitespace-pre-wrap max-h-48 overflow-y-auto">
-                {buildDealerOrderMessage(dealerMsgLang)}
-              </div>
-            </div>
+            {/* Bottom Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-200 shrink-0">
+              <button
+                onClick={() => handleDeleteNote(viewingNote.id, viewingNote.title)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-semibold transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Note</span>
+              </button>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setShowDealerModal(false)}
-                className="btn-secondary text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSendToDealer}
-                disabled={!selectedDealerId}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded text-xs font-bold flex items-center gap-1.5 shadow-xs"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Send WhatsApp Order</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenEditModal(viewingNote)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  <span>Edit Note</span>
+                </button>
+                <button
+                  onClick={() => setViewingNote(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Editable WhatsApp Dispatch Modal for Wholesale Dealer Orders */}
-      {waModalData && (
-        <WhatsAppModal
-          isOpen={waModalData.isOpen}
-          onClose={() => setWaModalData(null)}
-          recipientName={waModalData.name}
-          recipientPhone={waModalData.phone}
-          initialMessage={waModalData.message}
-          defaultTarget={settings.whatsapp_target || 'desktop'}
-          title="Send Dealer Purchase Order via WhatsApp"
-        />
+      {/* Editor Modal (Create / Edit) */}
+      {showEditorModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl my-6 border border-slate-200">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                  <ClipboardList className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">
+                    {editingNote ? 'Edit Visual Note' : 'Create Visual Note'}
+                  </h3>
+                  <p className="text-xs text-slate-500">Attach photo slip and link catalog product</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEditorModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNote} className="space-y-4 pt-4">
+              {/* Note Title */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Note Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Split AC Compressor Slip, Ramesh Mechanic Requirement"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"
+                />
+              </div>
+
+              {/* Photo Upload / Camera Capture */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Photo / Slip / Part Picture
+                </label>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+
+                {imageData ? (
+                  <div className="relative rounded-xl border border-slate-200 overflow-hidden bg-slate-900 group h-48 flex items-center justify-center">
+                    <img
+                      src={imageData}
+                      alt="Uploaded Note"
+                      className="max-h-48 w-auto max-w-full object-contain"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-white text-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-colors shadow-xs"
+                      >
+                        Change Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors shadow-xs"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-200 hover:border-purple-400 rounded-xl p-5 text-center cursor-pointer transition-colors bg-slate-50/50 hover:bg-purple-50/20"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center mx-auto mb-2">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <div className="text-xs font-semibold text-slate-700">
+                      Upload photo or take a picture
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      Supports PNG, JPG, JPEG (slips, part labels, mechanic notes)
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Link Catalog Product Dropdown */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Link Catalog Product (Optional)
+                  </label>
+                  {selectedProductId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProductId(undefined);
+                        setSelectedProductName(undefined);
+                      }}
+                      className="text-[11px] text-rose-500 hover:underline"
+                    >
+                      Clear Link
+                    </button>
+                  )}
+                </div>
+                <SearchableCombobox
+                  options={productOptions}
+                  value={selectedProductName || ''}
+                  onChange={(val) => setSelectedProductName(val)}
+                  onSelectOption={(opt) => {
+                    setSelectedProductName(opt.label);
+                    setSelectedProductId(opt.id);
+                  }}
+                  placeholder="Select product to link with this note..."
+                />
+              </div>
+
+              {/* Note Content Description */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Note Content / Memo
+                </label>
+                <textarea
+                  rows={4}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Type note details, mechanic specifications, order quantities, or reminders..."
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none resize-none font-mono"
+                />
+              </div>
+
+              {/* Form Action Buttons */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowEditorModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium shadow-sm transition-colors"
+                >
+                  {editingNote ? 'Update Note' : 'Save Note'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

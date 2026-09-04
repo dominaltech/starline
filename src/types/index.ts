@@ -34,6 +34,7 @@ export interface Section {
 export interface Product {
   id: string;
   name: string;
+  type?: string; // e.g. "AC Spares", "Fridge Spares", "Washing Machine", "Capacitor", etc.
   sku?: string;
   hsn_code?: string;
   unit: string; // 'PCS' | 'NOS' | 'QTL' | 'SET' | 'MTR'
@@ -83,6 +84,14 @@ export interface BillItem {
   job_status: JobStatus;
 }
 
+export interface PaymentSplit {
+  cash?: number;
+  online1?: number;
+  online2?: number;
+  online3?: number;
+  udhar?: number;
+}
+
 export interface Bill {
   id: string;
   invoice_num: string; // e.g. "980", "981" or "SL/981"
@@ -109,8 +118,10 @@ export interface Bill {
   assigned_worker_id?: string;
   assigned_worker_name?: string;
   payment_status: PaymentStatus;
+  payment_mode?: string; // 'Cash' | 'Online 1' | 'Online 2' | 'Online 3' | 'Split'
   paid_amount: number;
   due_amount: number;
+  split_payment?: PaymentSplit;
   is_cancelled?: boolean;
   created_at: string;
 }
@@ -212,6 +223,9 @@ export interface AppNote {
   id: string;
   title: string;
   content: string;
+  image_data?: string;
+  product_id?: string;
+  product_name?: string;
   product_refs: string[];
   note_type: 'GENERAL' | 'ORDER';
   created_at: string;
@@ -246,6 +260,7 @@ export type B2BPaymentMethod =
   | 'Online 2'
   | 'Online 3'
   | 'Udhar'
+  | 'Split'
   | 'PhonePe'
   | 'GPay'
   | 'Bank Transfer'
@@ -266,7 +281,32 @@ export interface B2BBill {
   payment_method: B2BPaymentMethod;
   paid_amount: number;
   due_amount: number;
+  split_payment?: PaymentSplit;
   notes?: string;
   created_at: string;
 }
+
+export type AMCDuration = '3_MONTHS' | '6_MONTHS' | '1_YEAR' | 'CUSTOM';
+export type AMCStatus = 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'RENEWED';
+
+export interface AMCContract {
+  id: string;
+  contract_num: string; // e.g. "AMC-101"
+  customer_id?: string;
+  customer_name: string;
+  customer_mobile: string;
+  customer_address: string;
+  appliance_name: string;
+  brand_model?: string;
+  duration: AMCDuration;
+  start_date: string; // YYYY-MM-DD
+  end_date: string; // YYYY-MM-DD
+  charge_amount: number;
+  paid_amount: number;
+  status: AMCStatus;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 

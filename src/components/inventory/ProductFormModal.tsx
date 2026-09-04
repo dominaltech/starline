@@ -14,7 +14,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ product, onC
   const { sections, saveProduct } = useDb();
 
   const [name, setName] = useState<string>(product?.name || '');
-  const [sku, setSku] = useState<string>(product?.sku || '');
+  const [type, setType] = useState<string>(product?.type || product?.sku || '');
   const [hsnCode, setHsnCode] = useState<string>(product?.hsn_code || '84159000');
   const [unit, setUnit] = useState<string>(product?.unit || 'NOS');
   const [buyPrice, setBuyPrice] = useState<string>(
@@ -56,7 +56,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ product, onC
     const newProd: Product = {
       id: product?.id || 'prod_' + Date.now(),
       name: name.trim(),
-      sku: sku.trim() || undefined,
+      type: type.trim() || undefined,
+      sku: type.trim() || undefined,
       hsn_code: hsnCode.trim() || '84159000',
       unit: unit.trim() || 'NOS',
       // If Super Admin, save buy price; if Admin editing, keep existing buy_price
@@ -102,13 +103,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ product, onC
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">SKU / Item Code</label>
+              <label className="block font-semibold text-slate-700 mb-1">Type / Model</label>
               <input
                 type="text"
-                placeholder="e.g. CMP-15-R32"
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-                className="input-field font-mono"
+                placeholder="e.g. Inverter / R32 / Heavy"
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="input-field font-semibold"
               />
             </div>
 

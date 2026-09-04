@@ -30,7 +30,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenStockAlert
 }) => {
   const { user, role, switchRole, verifyAndSwitchToSuperAdmin, isSuperAdmin } = useAuth();
-  const { bills, products, customers, acknowledgedAlerts, acknowledgeStockAlerts } = useDb();
+  const { bills, b2bBills, products, customers, acknowledgedAlerts, acknowledgeStockAlerts } = useDb();
   const { t } = useLanguage();
 
   // Super Admin Password Modal States
@@ -39,10 +39,13 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [passwordError, setPasswordError] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  // Quick stats
+  // Quick stats (Unifying Retail Invoices + B2B Mechanic Trade)
   const todayStr = new Date().toISOString().split('T')[0];
-  const todayBills = bills.filter((b) => b.invoice_date === todayStr && !b.is_cancelled);
-  const todayTotal = todayBills.reduce((acc, b) => acc + b.grand_total, 0);
+  const todayRetailBills = bills.filter((b) => b.invoice_date === todayStr && !b.is_cancelled);
+  const todayB2BBills = b2bBills.filter((b) => b.bill_date === todayStr);
+  const todayTotal =
+    todayRetailBills.reduce((acc, b) => acc + b.grand_total, 0) +
+    todayB2BBills.reduce((acc, b) => acc + b.total_amount, 0);
 
   const unhandledLowStockItems = products.filter(
     (p) =>

@@ -45,7 +45,7 @@ export const StockCombinerModal: React.FC<StockCombinerModalProps> = ({ product,
 
         <div className="bg-slate-50 p-3 rounded-md border border-slate-200 text-xs space-y-1">
           <div className="font-bold text-slate-900">{product.name}</div>
-          <div className="text-slate-500 font-mono">SKU: {product.sku || 'N/A'} • Unit: {product.unit}</div>
+          <div className="text-slate-500 font-medium">Type: {product.type || product.sku || 'N/A'} • Unit: {product.unit}</div>
           <div className="text-slate-700 pt-1">
             Current Stock Level: <span className="font-black text-slate-900">{product.stock_qty} {product.unit}</span>
           </div>

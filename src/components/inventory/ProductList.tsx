@@ -211,6 +211,7 @@ export const ProductList: React.FC = () => {
     const q = searchQuery.toLowerCase().trim();
     return (
       p.name.toLowerCase().includes(q) ||
+      (p.type && p.type.toLowerCase().includes(q)) ||
       (p.sku && p.sku.toLowerCase().includes(q)) ||
       (p.hsn_code && p.hsn_code.includes(q))
     );
@@ -287,7 +288,7 @@ export const ProductList: React.FC = () => {
         <div className="md:col-span-2 relative flex items-center">
           <input
             type="text"
-            placeholder="Search by part name, SKU / code, or HSN number..."
+            placeholder="Search by part name, type / model, or HSN number..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input-field pl-9 pr-10 text-xs font-medium"
@@ -333,7 +334,7 @@ export const ProductList: React.FC = () => {
               <tr>
                 <th className="py-3 px-3 w-14 text-center">Photo</th>
                 <th className="py-3 px-3">Item Description (Click to Edit)</th>
-                <th className="py-3 px-3">SKU / Code</th>
+                <th className="py-3 px-3">Type</th>
                 <th className="py-3 px-3">Storage Rack</th>
                 {isSuperAdmin && (
                   <th className="py-3 px-3 text-right">Buy Price (₹)</th>
@@ -420,9 +421,9 @@ export const ProductList: React.FC = () => {
                         )}
                       </td>
 
-                      {/* SKU / Code */}
-                      <td className="py-2 px-3 font-mono text-slate-600 font-medium">
-                        {p.sku || '-'}
+                      {/* Product Type */}
+                      <td className="py-2 px-3 font-semibold text-slate-700">
+                        {p.type || p.sku || '-'}
                       </td>
 
                       {/* Storage Rack */}

@@ -15,10 +15,13 @@ import {
 } from 'lucide-react';
 
 export const FinancialReports: React.FC = () => {
-  const { bills, products, customers, settings } = useDb();
+  const { bills, b2bBills, products, customers, mechanics, settings } = useDb();
   const { isSuperAdmin, role } = useAuth();
 
   const reportRef = useRef<HTMLDivElement>(null);
+
+  // Trade Channel Filter ('ALL' | 'RETAIL' | 'B2B')
+  const [tradeChannel, setTradeChannel] = useState<'ALL' | 'RETAIL' | 'B2B'>('ALL');
 
   // Date Filter Range
   const [periodPreset, setPeriodPreset] = useState<string>('THIS_MONTH');
@@ -55,37 +58,58 @@ export const FinancialReports: React.FC = () => {
 
   const { from, to } = getDates();
 
-  // Filter bills
+  // Filter retail bills
   const periodBills = bills.filter(
     b => b.invoice_date >= from && b.invoice_date <= to && !b.is_cancelled
+  );
+
+  // Filter B2B mechanic bills
+  const periodB2BBills = b2bBills.filter(
+    b => b.bill_date >= from && b.bill_date <= to
   );
 
   const estimateBills = periodBills.filter(b => b.bill_type === 'ESTIMATE');
   const gstBills = periodBills.filter(b => b.bill_type === 'GST');
 
-  // Sales totals
-  const totalEstimateSales = estimateBills.reduce((acc, b) => acc + b.grand_total, 0);
-  const totalGstSales = gstBills.reduce((acc, b) => acc + b.grand_total, 0);
-  const totalGrossSales = totalEstimateSales + totalGstSales;
+  // Sales totals based on channel
+  const totalEstimateSales = tradeChannel !== 'B2B' ? estimateBills.reduce((acc, b) => acc + b.grand_total, 0) : 0;
+  const totalGstSales = tradeChannel !== 'B2B' ? gstBills.reduce((acc, b) => acc + b.grand_total, 0) : 0;
+  const totalB2BSales = tradeChannel !== 'RETAIL' ? periodB2BBills.reduce((acc, b) => acc + b.total_amount, 0) : 0;
+  const totalGrossSales = totalEstimateSales + totalGstSales + totalB2BSales;
 
-  // Tax breakdown
-  const totalTaxable = gstBills.reduce((acc, b) => acc + b.taxable_value, 0);
-  const totalCgst = gstBills.reduce((acc, b) => acc + b.cgst_amount, 0);
-  const totalSgst = gstBills.reduce((acc, b) => acc + b.sgst_amount, 0);
+  const activeInvoiceCount = (tradeChannel !== 'B2B' ? periodBills.length : 0) + (tradeChannel !== 'RETAIL' ? periodB2BBills.length : 0);
+
+  // Tax breakdown (GST Invoices)
+  const totalTaxable = tradeChannel !== 'B2B' ? gstBills.reduce((acc, b) => acc + b.taxable_value, 0) : 0;
+  const totalCgst = tradeChannel !== 'B2B' ? gstBills.reduce((acc, b) => acc + b.cgst_amount, 0) : 0;
+  const totalSgst = tradeChannel !== 'B2B' ? gstBills.reduce((acc, b) => acc + b.sgst_amount, 0) : 0;
   const totalTaxCollected = totalCgst + totalSgst;
 
   // Cost & Profit calculations (Super Admin only)
   let totalCostOfGoods = 0;
   if (isSuperAdmin) {
-    periodBills.forEach(b => {
-      b.items.forEach(it => {
-        if (it.product_id) {
-          const prod = products.find(p => p.id === it.product_id);
+    if (tradeChannel !== 'B2B') {
+      periodBills.forEach(b => {
+        b.items.forEach(it => {
+          if (it.product_id) {
+            const prod = products.find(p => p.id === it.product_id);
+            const buyPrice = prod?.buy_price || 0;
+            totalCostOfGoods += buyPrice * it.qty;
+          }
+        });
+      });
+    }
+    if (tradeChannel !== 'RETAIL') {
+      periodB2BBills.forEach(b => {
+        b.items.forEach(it => {
+          const prod = it.product_id
+            ? products.find(p => p.id === it.product_id)
+            : products.find(p => p.name.toLowerCase() === (it.product_name || '').trim().toLowerCase());
           const buyPrice = prod?.buy_price || 0;
           totalCostOfGoods += buyPrice * it.qty;
-        }
+        });
       });
-    });
+    }
   }
 
   const grossProfit = totalGrossSales - totalTaxCollected - totalCostOfGoods;
@@ -93,8 +117,13 @@ export const FinancialReports: React.FC = () => {
     ? (grossProfit / (totalGrossSales - totalTaxCollected)) * 100
     : 0;
 
-  // Outstanding Dues
-  const totalDuesOutstanding = customers.reduce((acc, c) => acc + c.dues_balance, 0);
+  // Outstanding Dues (Customers + Unlinked Mechanics)
+  const customerDues = customers.reduce((acc, c) => acc + (c.dues_balance || 0), 0);
+  const custPhones = new Set(customers.map(c => c.mobile.trim()));
+  const unlinkedMechDues = mechanics
+    .filter(m => !m.phone || !custPhones.has(m.phone.trim()))
+    .reduce((acc, m) => acc + (m.dues_balance || 0), 0);
+  const totalDuesOutstanding = customerDues + unlinkedMechDues;
 
   // PDF Export
   const handleExportPdf = async () => {
@@ -172,44 +201,63 @@ export const FinancialReports: React.FC = () => {
         </div>
       </div>
 
-      {/* Date Filter Selection */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs flex flex-wrap items-center gap-3 text-xs">
-        <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-          <Calendar className="w-4 h-4 text-blue-900" />
-          <span>Report Period:</span>
-        </span>
+      {/* Filter Selection: Date & Channel */}
+      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-3 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-blue-900" />
+            <span>Report Period:</span>
+          </span>
 
-        {['TODAY', 'THIS_WEEK', 'THIS_MONTH', 'THIS_YEAR', 'CUSTOM'].map((preset) => (
-          <button
-            key={preset}
-            onClick={() => setPeriodPreset(preset)}
-            className={`px-3 py-1.5 rounded font-medium transition-all ${
-              periodPreset === preset
-                ? 'bg-[#0F2942] text-white shadow-xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            {preset.replace('_', ' ')}
-          </button>
-        ))}
+          {['TODAY', 'THIS_WEEK', 'THIS_MONTH', 'THIS_YEAR', 'CUSTOM'].map((preset) => (
+            <button
+              key={preset}
+              onClick={() => setPeriodPreset(preset)}
+              className={`px-3 py-1.5 rounded font-medium transition-all ${
+                periodPreset === preset
+                  ? 'bg-[#0F2942] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {preset.replace('_', ' ')}
+            </button>
+          ))}
 
-        {periodPreset === 'CUSTOM' && (
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-300">
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
-            />
-            <span className="text-slate-400">to</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
-            />
-          </div>
-        )}
+          {periodPreset === 'CUSTOM' && (
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-300">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="border border-slate-300 rounded px-2 py-1 text-xs"
+              />
+              <span className="text-slate-400">to</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="border border-slate-300 rounded px-2 py-1 text-xs"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+          <span className="font-semibold text-slate-700">Trade Channel:</span>
+          {(['ALL', 'RETAIL', 'B2B'] as const).map((ch) => (
+            <button
+              key={ch}
+              onClick={() => setTradeChannel(ch)}
+              className={`px-3 py-1 rounded font-semibold transition-all ${
+                tradeChannel === ch
+                  ? 'bg-blue-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {ch === 'ALL' ? 'All Sales (Retail + B2B)' : ch === 'RETAIL' ? 'Retail Invoices Only' : 'B2B Mechanic Trade Only'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Printable / Renderable CA Statement Document */}
@@ -238,6 +286,9 @@ export const FinancialReports: React.FC = () => {
             <div className="text-xs font-semibold text-slate-700 mt-1">
               Period: {formatDate(from)} to {formatDate(to)}
             </div>
+            <div className="text-[11px] font-medium text-blue-900">
+              Channel: {tradeChannel === 'ALL' ? 'All Trade (Retail + B2B)' : tradeChannel === 'RETAIL' ? 'Retail Invoices' : 'B2B Mechanic Trade'}
+            </div>
             <div className="text-[11px] text-slate-400">Generated on {new Date().toLocaleDateString('en-GB')}</div>
           </div>
         </div>
@@ -251,7 +302,7 @@ export const FinancialReports: React.FC = () => {
             <div className="text-xl font-black text-slate-900 mt-1">
               {formatCurrency(totalGrossSales)}
             </div>
-            <div className="text-[11px] text-slate-500 mt-1">{periodBills.length} Invoices issued</div>
+            <div className="text-[11px] text-slate-500 mt-1">{activeInvoiceCount} Bills / Invoices issued</div>
           </div>
 
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
@@ -285,12 +336,12 @@ export const FinancialReports: React.FC = () => {
 
           <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
             <span className="text-xs font-semibold text-amber-800 uppercase tracking-wide">
-              Outstanding Customer Dues
+              Outstanding Dues
             </span>
             <div className="text-xl font-black text-amber-900 mt-1">
               {formatCurrency(totalDuesOutstanding)}
             </div>
-            <div className="text-[11px] text-amber-700 mt-1">Receivables from clients</div>
+            <div className="text-[11px] text-amber-700 mt-1">Customers & Mechanics khata</div>
           </div>
         </div>
 
@@ -300,54 +351,70 @@ export const FinancialReports: React.FC = () => {
             <thead className="table-header">
               <tr>
                 <th className="py-2.5 px-4">Financial Particulars</th>
-                <th className="py-2.5 px-4 text-center">Invoice Count</th>
+                <th className="py-2.5 px-4 text-center">Bill/Invoice Count</th>
                 <th className="py-2.5 px-4 text-right">Amount (₹)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              <tr className="hover:bg-slate-50">
-                <td className="py-2.5 px-4 font-semibold text-slate-800">
-                  1. Non-GST / Estimate Invoices (Retail Counter)
-                </td>
-                <td className="py-2.5 px-4 text-center font-mono">{estimateBills.length}</td>
-                <td className="py-2.5 px-4 text-right font-mono font-semibold">
-                  {formatCurrency(totalEstimateSales)}
-                </td>
-              </tr>
+              {tradeChannel !== 'B2B' && (
+                <>
+                  <tr className="hover:bg-slate-50">
+                    <td className="py-2.5 px-4 font-semibold text-slate-800">
+                      1. Non-GST / Estimate Invoices (Retail Counter)
+                    </td>
+                    <td className="py-2.5 px-4 text-center font-mono">{estimateBills.length}</td>
+                    <td className="py-2.5 px-4 text-right font-mono font-semibold">
+                      {formatCurrency(totalEstimateSales)}
+                    </td>
+                  </tr>
 
-              <tr className="hover:bg-slate-50">
-                <td className="py-2.5 px-4 font-semibold text-slate-800">
-                  2. GST Tax Invoices (Taxable Value)
-                </td>
-                <td className="py-2.5 px-4 text-center font-mono">{gstBills.length}</td>
-                <td className="py-2.5 px-4 text-right font-mono font-semibold">
-                  {formatCurrency(totalTaxable)}
-                </td>
-              </tr>
+                  <tr className="hover:bg-slate-50">
+                    <td className="py-2.5 px-4 font-semibold text-slate-800">
+                      2. GST Tax Invoices (Taxable Value)
+                    </td>
+                    <td className="py-2.5 px-4 text-center font-mono">{gstBills.length}</td>
+                    <td className="py-2.5 px-4 text-right font-mono font-semibold">
+                      {formatCurrency(totalTaxable)}
+                    </td>
+                  </tr>
 
-              <tr className="hover:bg-slate-50 bg-blue-50/30">
-                <td className="py-2 px-4 pl-8 text-slate-600">
-                  ↳ Central GST (CGST 9%)
-                </td>
-                <td className="py-2 px-4 text-center text-slate-400">-</td>
-                <td className="py-2 px-4 text-right font-mono text-slate-700">
-                  {formatCurrency(totalCgst)}
-                </td>
-              </tr>
+                  <tr className="hover:bg-slate-50 bg-blue-50/30">
+                    <td className="py-2 px-4 pl-8 text-slate-600">
+                      ↳ Central GST (CGST 9%)
+                    </td>
+                    <td className="py-2 px-4 text-center text-slate-400">-</td>
+                    <td className="py-2 px-4 text-right font-mono text-slate-700">
+                      {formatCurrency(totalCgst)}
+                    </td>
+                  </tr>
 
-              <tr className="hover:bg-slate-50 bg-blue-50/30">
-                <td className="py-2 px-4 pl-8 text-slate-600">
-                  ↳ State GST (SGST 9%)
-                </td>
-                <td className="py-2 px-4 text-center text-slate-400">-</td>
-                <td className="py-2 px-4 text-right font-mono text-slate-700">
-                  {formatCurrency(totalSgst)}
-                </td>
-              </tr>
+                  <tr className="hover:bg-slate-50 bg-blue-50/30">
+                    <td className="py-2 px-4 pl-8 text-slate-600">
+                      ↳ State GST (SGST 9%)
+                    </td>
+                    <td className="py-2 px-4 text-center text-slate-400">-</td>
+                    <td className="py-2 px-4 text-right font-mono text-slate-700">
+                      {formatCurrency(totalSgst)}
+                    </td>
+                  </tr>
+                </>
+              )}
+
+              {tradeChannel !== 'RETAIL' && (
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2.5 px-4 font-semibold text-slate-800">
+                    {tradeChannel === 'B2B' ? '1.' : '3.'} B2B Mechanic Trade Bills (Counter Sales to Garages/Mechanics)
+                  </td>
+                  <td className="py-2.5 px-4 text-center font-mono">{periodB2BBills.length}</td>
+                  <td className="py-2.5 px-4 text-right font-mono font-semibold">
+                    {formatCurrency(totalB2BSales)}
+                  </td>
+                </tr>
+              )}
 
               <tr className="font-bold bg-slate-50 border-t border-slate-300">
                 <td className="py-2.5 px-4">TOTAL GROSS REVENUE (Sales + Tax)</td>
-                <td className="py-2.5 px-4 text-center font-mono font-bold">{periodBills.length}</td>
+                <td className="py-2.5 px-4 text-center font-mono font-bold">{activeInvoiceCount}</td>
                 <td className="py-2.5 px-4 text-right font-mono font-black text-slate-900">
                   {formatCurrency(totalGrossSales)}
                 </td>

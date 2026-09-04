@@ -1,4 +1,4 @@
-import { Customer, Product, Section, Worker, Mechanic, ShopSettings, User } from '../types';
+import { Customer, Product, Section, Worker, Mechanic, AMCContract, ShopSettings, User } from '../types';
 
 export const INITIAL_SETTINGS: ShopSettings = {
   shop_name: 'STAR LINE SERVICES',
@@ -143,6 +143,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_1',
     name: 'Rotary Compressor 1.5 Ton R32',
+    type: 'Compressor',
     sku: 'CMP-15-R32',
     hsn_code: '84143000',
     unit: 'NOS',
@@ -157,6 +158,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_2',
     name: 'Running Capacitor 45 MFD',
+    type: 'Capacitor',
     sku: 'CAP-45-RUN',
     hsn_code: '85322500',
     unit: 'NOS',
@@ -171,6 +173,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_3',
     name: 'Single Door Fridge Thermostat WPF-22',
+    type: 'Fridge Spares',
     sku: 'THM-WPF22',
     hsn_code: '90321010',
     unit: 'NOS',
@@ -185,6 +188,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_4',
     name: 'Fridge Relay + OLP Set (Universal)',
+    type: 'Fridge Spares',
     sku: 'RLY-OLP-SET',
     hsn_code: '85364100',
     unit: 'SET',
@@ -199,6 +203,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_5',
     name: 'Washing Machine Drain Motor 220V',
+    type: 'Washing Machine',
     sku: 'WM-DRN-MTR',
     hsn_code: '84509010',
     unit: 'NOS',
@@ -213,6 +218,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_6',
     name: 'Washing Machine Inlet Solenoid Valve Double',
+    type: 'Washing Machine',
     sku: 'WM-INL-DBL',
     hsn_code: '84818030',
     unit: 'NOS',
@@ -227,6 +233,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_7',
     name: 'Microwave Magnetron 2M214',
+    type: 'Microwave Spares',
     sku: 'MW-MAG-214',
     hsn_code: '85407100',
     unit: 'NOS',
@@ -241,6 +248,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_8',
     name: 'R134a Refrigerant Can 450g',
+    type: 'Gas / Refrigerant',
     sku: 'GAS-R134A-450',
     hsn_code: '29033990',
     unit: 'NOS',
@@ -289,4 +297,49 @@ export const INITIAL_MECHANICS: Mechanic[] = [
     updated_at: new Date().toISOString()
   }
 ];
+
+const nowTime = Date.now();
+const oneDayMs = 86400000;
+
+export const INITIAL_AMC_CONTRACTS: AMCContract[] = [
+  {
+    id: 'amc_1',
+    contract_num: 'AMC-101',
+    customer_id: 'cust_1',
+    customer_name: 'Anand Kulkarni',
+    customer_mobile: '9890123456',
+    customer_address: 'Flat 402, Shanti Heights, Lashkar, Solapur',
+    appliance_name: 'Air Conditioner',
+    brand_model: 'Voltas 1.5 Ton Split Inverter AC',
+    duration: '1_YEAR',
+    start_date: new Date(nowTime - oneDayMs * 357).toISOString().split('T')[0],
+    end_date: new Date(nowTime + oneDayMs * 8).toISOString().split('T')[0],
+    charge_amount: 2800,
+    paid_amount: 2800,
+    status: 'EXPIRING_SOON',
+    notes: '2 Free dry services and 1 wet chemical wash included',
+    created_at: new Date(nowTime - oneDayMs * 357).toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'amc_2',
+    contract_num: 'AMC-102',
+    customer_id: 'cust_3',
+    customer_name: 'Dr. Suresh Deshmukh',
+    customer_mobile: '9422019988',
+    customer_address: 'Civil Hospital Road, Solapur',
+    appliance_name: 'Refrigerator',
+    brand_model: 'Samsung 253L Double Door Refrigerator',
+    duration: '1_YEAR',
+    start_date: new Date(nowTime - oneDayMs * 120).toISOString().split('T')[0],
+    end_date: new Date(nowTime + oneDayMs * 245).toISOString().split('T')[0],
+    charge_amount: 1800,
+    paid_amount: 1800,
+    status: 'ACTIVE',
+    notes: 'Covers compressor relay, thermostat check & quarterly gas leak inspection',
+    created_at: new Date(nowTime - oneDayMs * 120).toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
 

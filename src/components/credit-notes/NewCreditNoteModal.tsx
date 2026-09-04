@@ -8,29 +8,92 @@ interface NewCreditNoteModalProps {
   onClose: () => void;
 }
 
-export const NewCreditNoteModal: React.FC<NewCreditNoteModalProps> = ({ onClose }) => {
-  const { bills, settings, createCreditNote } = useDb();
+interface NormalizedReturnItem {
+  id: string;
+  product_id?: string;
+  description: string;
+  qty: number;
+  rate: number;
+  tax_rate: number;
+}
 
-  const [selectedBillId, setSelectedBillId] = useState<string>('');
+export const NewCreditNoteModal: React.FC<NewCreditNoteModalProps> = ({ onClose }) => {
+  const { bills, b2bBills, settings, createCreditNote } = useDb();
+
+  const [selectedKey, setSelectedKey] = useState<string>('');
   const [noteNum, setNoteNum] = useState<string>(`CN-${settings.starting_credit_note_num || 101}`);
   const [noteDate, setNoteDate] = useState<string>(formatDateInput());
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [returnQty, setReturnQty] = useState<number>(1);
   const [reason, setReason] = useState<string>('Defective part replaced / Customer return');
 
-  const selectedBill = bills.find(b => b.id === selectedBillId);
-  const selectedItem = selectedBill?.items.find(i => i.id === selectedItemId);
+  // Resolve bill metadata
+  let activeBill: {
+    id: string;
+    invoice_num: string;
+    partyName: string;
+    partyId?: string;
+    gstin?: string;
+    isB2B: boolean;
+    items: NormalizedReturnItem[];
+  } | null = null;
+
+  if (selectedKey.startsWith('retail_')) {
+    const id = selectedKey.replace('retail_', '');
+    const b = bills.find(bill => bill.id === id);
+    if (b) {
+      activeBill = {
+        id: b.id,
+        invoice_num: b.invoice_num,
+        partyName: b.customer_name,
+        partyId: b.customer_id,
+        gstin: b.customer_gstin,
+        isB2B: false,
+        items: b.items.map(it => ({
+          id: it.id,
+          product_id: it.product_id,
+          description: it.item_description,
+          qty: it.qty,
+          rate: it.rate || (it.amount / (it.qty || 1)),
+          tax_rate: it.tax_rate || (b.bill_type === 'GST' ? 18 : 0)
+        }))
+      };
+    }
+  } else if (selectedKey.startsWith('b2b_')) {
+    const id = selectedKey.replace('b2b_', '');
+    const b = b2bBills.find(bill => bill.id === id);
+    if (b) {
+      activeBill = {
+        id: b.id,
+        invoice_num: b.invoice_num,
+        partyName: b.mechanic_name || b.customer_name || 'Mechanic',
+        partyId: b.mechanic_id,
+        gstin: undefined,
+        isB2B: true,
+        items: b.items.map(it => ({
+          id: it.id,
+          product_id: it.product_id,
+          description: it.product_name,
+          qty: it.qty,
+          rate: it.price || (it.total / (it.qty || 1)),
+          tax_rate: 0
+        }))
+      };
+    }
+  }
+
+  const selectedItem = activeBill?.items.find(i => i.id === selectedItemId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBill || !selectedItem) {
+    if (!activeBill || !selectedItem) {
       alert('Please select an invoice and a line item to return.');
       return;
     }
 
-    const rate = selectedItem.rate || (selectedItem.amount / (selectedItem.qty || 1));
+    const rate = selectedItem.rate;
     const taxable = Math.round(rate * returnQty * 100) / 100;
-    const taxRate = selectedItem.tax_rate || (selectedBill.bill_type === 'GST' ? 18 : 0);
+    const taxRate = selectedItem.tax_rate;
     const halfTax = taxRate / 2;
     const cgst = Math.round(((taxable * halfTax) / 100) * 100) / 100;
     const sgst = Math.round(((taxable * halfTax) / 100) * 100) / 100;
@@ -39,15 +102,15 @@ export const NewCreditNoteModal: React.FC<NewCreditNoteModalProps> = ({ onClose 
     const newNote: Omit<CreditNote, 'id' | 'created_at'> = {
       note_num: noteNum.trim(),
       note_date: noteDate,
-      original_bill_id: selectedBill.id,
-      original_invoice_num: selectedBill.invoice_num,
-      customer_id: selectedBill.customer_id,
-      customer_name: selectedBill.customer_name,
-      customer_gstin: selectedBill.customer_gstin,
+      original_bill_id: activeBill.id,
+      original_invoice_num: activeBill.invoice_num,
+      customer_id: activeBill.partyId,
+      customer_name: activeBill.partyName,
+      customer_gstin: activeBill.gstin,
       note_type: 'C',
       reason: reason.trim(),
       product_id: selectedItem.product_id,
-      item_description: selectedItem.item_description,
+      item_description: selectedItem.description,
       qty: returnQty,
       tax_rate: taxRate,
       taxable_value: taxable,
@@ -99,42 +162,51 @@ export const NewCreditNoteModal: React.FC<NewCreditNoteModalProps> = ({ onClose 
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Select Original Invoice *</label>
+            <label className="block font-semibold text-slate-700 mb-1">Select Original Invoice or B2B Bill *</label>
             <select
-              value={selectedBillId}
+              value={selectedKey}
               onChange={(e) => {
-                setSelectedBillId(e.target.value);
+                setSelectedKey(e.target.value);
                 setSelectedItemId('');
               }}
               required
               className="input-field cursor-pointer font-medium"
             >
-              <option value="">-- Choose Invoice --</option>
-              {bills.filter(b => !b.is_cancelled).map((b) => (
-                <option key={b.id} value={b.id}>
-                  Invoice #{b.invoice_num} — {b.customer_name} (₹{b.grand_total})
-                </option>
-              ))}
+              <option value="">-- Choose Invoice or B2B Bill --</option>
+              <optgroup label="Retail Invoices">
+                {bills.filter(b => !b.is_cancelled).map((b) => (
+                  <option key={`retail_${b.id}`} value={`retail_${b.id}`}>
+                    Invoice #{b.invoice_num} — {b.customer_name} (₹{b.grand_total})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="B2B Mechanic Trade Bills">
+                {b2bBills.map((b) => (
+                  <option key={`b2b_${b.id}`} value={`b2b_${b.id}`}>
+                    B2B #{b.invoice_num} — {b.mechanic_name || b.customer_name || 'Mechanic'} (₹{b.total_amount})
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
 
-          {selectedBill && (
+          {activeBill && (
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Select Returned Spare Item *</label>
               <select
                 value={selectedItemId}
                 onChange={(e) => {
                   setSelectedItemId(e.target.value);
-                  const it = selectedBill.items.find(i => i.id === e.target.value);
+                  const it = activeBill.items.find(i => i.id === e.target.value);
                   if (it) setReturnQty(it.qty);
                 }}
                 required
                 className="input-field cursor-pointer"
               >
-                <option value="">-- Choose Item from Invoice --</option>
-                {selectedBill.items.map((it) => (
+                <option value="">-- Choose Item from {activeBill.isB2B ? 'B2B Bill' : 'Invoice'} --</option>
+                {activeBill.items.map((it) => (
                   <option key={it.id} value={it.id}>
-                    {it.item_description} (Sold Qty: {it.qty}, Rate: ₹{it.rate || it.amount})
+                    {it.description} (Sold Qty: {it.qty}, Rate: ₹{it.rate})
                   </option>
                 ))}
               </select>
@@ -158,7 +230,7 @@ export const NewCreditNoteModal: React.FC<NewCreditNoteModalProps> = ({ onClose 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Total Credit Value</label>
                 <div className="text-sm font-black text-slate-900 pt-1">
-                  ₹{((selectedItem.rate || (selectedItem.amount / selectedItem.qty)) * returnQty).toFixed(2)}
+                  ₹{(selectedItem.rate * returnQty).toFixed(2)}
                 </div>
               </div>
             </div>

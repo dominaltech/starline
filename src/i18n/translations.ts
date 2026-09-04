@@ -11,6 +11,7 @@ export interface Translations {
   nav_udhar: string;
   nav_b2b: string;
   nav_services: string;
+  nav_amc: string;
   nav_notes: string;
   nav_analytics: string;
   nav_reports: string;
@@ -204,6 +205,7 @@ export const translations: Record<Language, Translations> = {
     nav_udhar: 'Udhar Khata (Dues)',
     nav_b2b: 'B2B Daily Billing',
     nav_services: 'Services',
+    nav_amc: 'AMC Contracts',
     nav_notes: 'Notes & Orders',
     nav_analytics: 'Analytics & Insights',
     nav_reports: 'CA Reports / P&L',
@@ -349,7 +351,7 @@ export const translations: Record<Language, Translations> = {
     inv_stock_level: 'Stock Level',
     inv_selling_price: 'Selling Price',
     inv_buy_price: 'Purchase Cost',
-    inv_sku: 'SKU Code',
+    inv_sku: 'Type',
     inv_hsn: 'HSN Code',
     inv_rack_section: 'Rack / Section',
     inv_min_alert: 'Min Stock Alert',
@@ -387,6 +389,7 @@ export const translations: Record<Language, Translations> = {
     nav_udhar: 'उधार खाते (बाकी)',
     nav_b2b: 'B2B दैनिक बिलिंग',
     nav_services: 'सेवा व्यवस्थापन',
+    nav_amc: 'AMC करार',
     nav_notes: 'नोट्स व ऑर्डर',
     nav_analytics: 'विश्लेषण व आकडेवारी',
     nav_reports: 'सीए अहवाल / नफा-तोटा',
@@ -532,7 +535,7 @@ export const translations: Record<Language, Translations> = {
     inv_stock_level: 'उपलब्ध साठा',
     inv_selling_price: 'विक्री दर',
     inv_buy_price: 'खरेदी दर',
-    inv_sku: 'SKU कोड',
+    inv_sku: 'प्रकार',
     inv_hsn: 'HSN कोड',
     inv_rack_section: 'रॅक / कप्पा',
     inv_min_alert: 'किमान साठा इशारा',
@@ -570,6 +573,7 @@ export const translations: Record<Language, Translations> = {
     nav_udhar: 'उधार खाता (बकाया)',
     nav_b2b: 'B2B दैनिक बिलिंग',
     nav_services: 'सेवा प्रबंधन',
+    nav_amc: 'एएमसी अनुबंध',
     nav_notes: 'नोट्स एवं ऑर्डर',
     nav_analytics: 'विश्लेषण एवं आंकड़े',
     nav_reports: 'सीए रिपोर्ट्स / लाभ-हानि',
@@ -715,7 +719,7 @@ export const translations: Record<Language, Translations> = {
     inv_stock_level: 'उपलब्ध स्टॉक',
     inv_selling_price: 'विक्री मूल्य',
     inv_buy_price: 'खरीद लागत',
-    inv_sku: 'SKU कोड',
+    inv_sku: 'प्रकार',
     inv_hsn: 'HSN कोड',
     inv_rack_section: 'रैक / सेक्शन',
     inv_min_alert: 'न्यूनतम स्टॉक चेतावनी',

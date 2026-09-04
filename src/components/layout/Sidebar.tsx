@@ -17,6 +17,7 @@ import {
   Wrench,
   ClipboardList,
   Wallet,
+  ShieldCheck,
   X
 } from 'lucide-react';
 
@@ -27,6 +28,7 @@ export type NavTab =
   | 'customers'
   | 'udhar'
   | 'services'
+  | 'amc'
   | 'notes'
   | 'inventory'
   | 'racks'
@@ -58,6 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'customers', labelKey: 'nav_customers', icon: Users },
     { id: 'udhar', labelKey: 'nav_udhar', icon: Wallet },
     { id: 'services', labelKey: 'nav_services', icon: Wrench },
+    { id: 'amc', labelKey: 'nav_amc', icon: ShieldCheck },
     { id: 'notes', labelKey: 'nav_notes', icon: ClipboardList },
     { id: 'inventory', labelKey: 'nav_products', icon: Package },
     { id: 'racks', labelKey: 'nav_racks', icon: LayoutGrid },

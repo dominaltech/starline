@@ -79,9 +79,19 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
   };
 
   const handleInputFocus = () => {
-    // When focusing, if there's text, show filtered matches
-    if (value.trim().length > 0) {
+    if (!value.trim()) {
+      setShowAll(true);
+    } else {
       setShowAll(false);
+    }
+    setIsOpen(true);
+  };
+
+  const handleInputClick = () => {
+    if (!isOpen) {
+      if (!value.trim()) {
+        setShowAll(true);
+      }
       setIsOpen(true);
     }
   };
@@ -122,6 +132,7 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
           value={value}
           onChange={handleInputChange}
           onFocus={handleInputFocus}
+          onClick={handleInputClick}
           placeholder={placeholder}
           disabled={disabled}
           title={title}

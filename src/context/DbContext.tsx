@@ -5,6 +5,7 @@ import {
   Section,
   Worker,
   Mechanic,
+  AMCContract,
   ShopSettings,
   Bill,
   CreditNote,
@@ -24,6 +25,7 @@ interface DbContextType {
   sections: Section[];
   workers: Worker[];
   mechanics: Mechanic[];
+  amcContracts: AMCContract[];
   bills: Bill[];
   creditNotes: CreditNote[];
   stockMovements: StockMovement[];
@@ -47,6 +49,8 @@ interface DbContextType {
   saveWorker: (w: Worker) => void;
   saveMechanic: (m: Mechanic) => Mechanic;
   deleteMechanic: (id: string) => void;
+  saveAMCContract: (amc: AMCContract) => AMCContract;
+  deleteAMCContract: (id: string) => void;
   createCreditNote: (cn: Omit<CreditNote, 'id' | 'created_at'>) => CreditNote;
   saveServiceRecord: (r: ServiceRecord) => ServiceRecord;
   deleteServiceRecord: (id: string) => void;
@@ -72,6 +76,7 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>(() => storage.getServiceRecords());
   const [appNotes, setAppNotes] = useState<AppNote[]>(() => storage.getAppNotes());
   const [b2bBills, setB2BBills] = useState<B2BBill[]>(() => storage.getB2BBills());
+  const [amcContracts, setAmcContracts] = useState<AMCContract[]>(() => storage.getAMCContracts());
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<string[]>(() =>
     storage.getAcknowledgedStockAlerts()
   );
@@ -89,6 +94,7 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setServiceRecords(storage.getServiceRecords());
     setAppNotes(storage.getAppNotes());
     setB2BBills(storage.getB2BBills());
+    setAmcContracts(storage.getAMCContracts());
     setAcknowledgedAlerts(storage.getAcknowledgedStockAlerts());
   }, [role]);
 
@@ -215,6 +221,17 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     refreshData();
   };
 
+  const handleSaveAMCContract = (amc: AMCContract) => {
+    const res = storage.saveAMCContract(amc);
+    refreshData();
+    return res;
+  };
+
+  const handleDeleteAMCContract = (id: string) => {
+    storage.deleteAMCContract(id);
+    refreshData();
+  };
+
   const value: DbContextType = {
     settings,
     customers,
@@ -228,6 +245,7 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     serviceRecords,
     appNotes,
     b2bBills,
+    amcContracts,
     acknowledgedAlerts,
     acknowledgeStockAlerts: handleAcknowledgeStockAlerts,
     resetStockAlerts: handleResetStockAlerts,
@@ -245,6 +263,8 @@ export const DbProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     saveWorker: handleSaveWorker,
     saveMechanic: handleSaveMechanic,
     deleteMechanic: handleDeleteMechanic,
+    saveAMCContract: handleSaveAMCContract,
+    deleteAMCContract: handleDeleteAMCContract,
     createCreditNote: handleCreateCreditNote,
     saveServiceRecord: handleSaveServiceRecord,
     deleteServiceRecord: handleDeleteServiceRecord,

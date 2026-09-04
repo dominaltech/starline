@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDb } from '../../context/DbContext';
-import { B2BBill, B2BBillItem, B2BPaymentMethod, Mechanic, Product } from '../../types';
+import { B2BBill, B2BBillItem, B2BPaymentMethod, Mechanic, Product, PaymentSplit } from '../../types';
 import { formatDate, formatDateInput, formatCurrency } from '../../utils/formatters';
 import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
 import {
@@ -24,7 +24,9 @@ import {
   Building,
   CreditCard,
   Banknote,
-  Globe
+  Globe,
+  Layers,
+  AlertCircle
 } from 'lucide-react';
 
 export const B2BBillingScreen: React.FC = () => {
@@ -47,6 +49,13 @@ export const B2BBillingScreen: React.FC = () => {
   const [mechanicPhone, setMechanicPhone] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<B2BPaymentMethod>('Cash');
   const [paidAmount, setPaidAmount] = useState<string>('');
+  const [splitPayment, setSplitPayment] = useState<PaymentSplit>({
+    cash: 0,
+    online1: 0,
+    online2: 0,
+    online3: 0,
+    udhar: 0
+  });
   const [notes, setNotes] = useState<string>('');
 
   // Selected mechanic record for showing dues
@@ -121,6 +130,15 @@ export const B2BBillingScreen: React.FC = () => {
     setPaymentMethod(mode);
     if (mode === 'Udhar') {
       setPaidAmount('0');
+    } else if (mode === 'Split') {
+      setSplitPayment({
+        cash: grandTotal,
+        online1: 0,
+        online2: 0,
+        online3: 0,
+        udhar: 0
+      });
+      setPaidAmount(String(grandTotal));
     } else {
       setPaidAmount(String(grandTotal));
     }
@@ -149,7 +167,7 @@ export const B2BBillingScreen: React.FC = () => {
     return products.map((p) => ({
       id: p.id,
       label: p.name,
-      subLabel: `${p.sku ? `[${p.sku}] ` : ''}Stock: ${p.stock_qty} ${p.unit}`,
+      subLabel: `${p.type || p.sku ? `[${p.type || p.sku}] ` : ''}Stock: ${p.stock_qty} ${p.unit}`,
       badge: `₹${p.selling_price}`,
       badgeColor:
         p.stock_qty <= (p.min_stock_alert || 5)
@@ -372,6 +390,7 @@ export const B2BBillingScreen: React.FC = () => {
     setMechanicName('');
     setMechanicPhone('');
     setPaidAmount('');
+    setSplitPayment({ cash: 0, online1: 0, online2: 0, online3: 0, udhar: 0 });
     setNotes('');
     setPaymentMethod('Cash');
     setItems([
@@ -394,10 +413,37 @@ export const B2BBillingScreen: React.FC = () => {
     }
 
     const currentGrandTotal = validItems.reduce((sum, it) => sum + (it.total || 0), 0);
-    const finalPaid = paymentMethod === 'Udhar' && (!paidAmount || paidAmount === '0')
-      ? 0
-      : (parseFloat(paidAmount) !== undefined && !isNaN(parseFloat(paidAmount)) ? parseFloat(paidAmount) : currentGrandTotal);
-    const finalDue = Math.max(0, Math.round((currentGrandTotal - finalPaid) * 100) / 100);
+
+    let finalPaid = currentGrandTotal;
+    let finalDue = 0;
+    let splitObj: PaymentSplit | undefined = undefined;
+
+    if (paymentMethod === 'Split') {
+      const splitCash = splitPayment.cash || 0;
+      const splitOnline1 = splitPayment.online1 || 0;
+      const splitOnline2 = splitPayment.online2 || 0;
+      const splitOnline3 = splitPayment.online3 || 0;
+      const splitUdhar = splitPayment.udhar || 0;
+      const splitSum = splitCash + splitOnline1 + splitOnline2 + splitOnline3 + splitUdhar;
+
+      if (Math.abs(splitSum - currentGrandTotal) > 0.5) {
+        alert(
+          `Split payment total (₹${splitSum.toFixed(2)}) must equal total bill amount (₹${currentGrandTotal.toFixed(2)}).`
+        );
+        return;
+      }
+      finalPaid = splitCash + splitOnline1 + splitOnline2 + splitOnline3;
+      finalDue = splitUdhar;
+      splitObj = { ...splitPayment };
+    } else {
+      finalPaid =
+        paymentMethod === 'Udhar' && (!paidAmount || paidAmount === '0')
+          ? 0
+          : parseFloat(paidAmount) !== undefined && !isNaN(parseFloat(paidAmount))
+          ? parseFloat(paidAmount)
+          : currentGrandTotal;
+      finalDue = Math.max(0, Math.round((currentGrandTotal - finalPaid) * 100) / 100);
+    }
 
     const invoiceNum = 'B2B-' + String(b2bBills.length + 1).padStart(3, '0');
 
@@ -413,6 +459,7 @@ export const B2BBillingScreen: React.FC = () => {
       items: validItems,
       total_amount: currentGrandTotal,
       payment_method: paymentMethod,
+      split_payment: splitObj,
       paid_amount: finalPaid,
       due_amount: finalDue,
       notes: notes.trim(),
@@ -780,11 +827,29 @@ export const B2BBillingScreen: React.FC = () => {
                 <span>Udhar (Credit)</span>
               </button>
 
+              {/* Split Payment Button */}
+              <button
+                type="button"
+                onClick={() => handlePaymentMethodChange('Split')}
+                className={`px-3.5 py-1 rounded text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
+                  paymentMethod === 'Split'
+                    ? 'bg-purple-700 text-white shadow-xs ring-2 ring-purple-300'
+                    : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-300'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Split Payment</span>
+              </button>
+
               {/* Status summary pill */}
               <div className="ml-auto text-[11px] font-semibold flex items-center gap-2">
                 {paymentMethod === 'Udhar' ? (
                   <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
                     ⚠️ Udhar Mode: {dueAmount > 0 ? `${formatCurrency(dueAmount)} remaining dues` : 'Paid'}
+                  </span>
+                ) : paymentMethod === 'Split' ? (
+                  <span className="text-purple-800 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">
+                    ⚡ Split Payment Mode
                   </span>
                 ) : (
                   <span className="text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
@@ -793,6 +858,134 @@ export const B2BBillingScreen: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Split Breakdown Inputs in B2B */}
+            {paymentMethod === 'Split' && (
+              <div className="p-2.5 bg-purple-50/40 rounded-lg border border-purple-200 space-y-2 mt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <Layers className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Mechanic Split Payment Breakdown</span>
+                  </div>
+
+                  {(() => {
+                    const splitSum =
+                      (splitPayment.cash || 0) +
+                      (splitPayment.online1 || 0) +
+                      (splitPayment.online2 || 0) +
+                      (splitPayment.online3 || 0) +
+                      (splitPayment.udhar || 0);
+                    const diff = Math.round((grandTotal - splitSum) * 100) / 100;
+
+                    if (Math.abs(diff) < 0.01) {
+                      return (
+                        <span className="text-[10.5px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-emerald-600" />
+                          <span>Matched ₹{splitSum.toFixed(2)} (100%)</span>
+                        </span>
+                      );
+                    } else if (diff > 0) {
+                      return (
+                        <span className="text-[10.5px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-amber-600" />
+                          <span>Remaining: ₹{diff.toFixed(2)}</span>
+                        </span>
+                      );
+                    } else {
+                      return (
+                        <span className="text-[10.5px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-rose-600" />
+                          <span>Exceeded: ₹{Math.abs(diff).toFixed(2)}</span>
+                        </span>
+                      );
+                    }
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <div>
+                    <label className="block text-[9.5px] uppercase font-bold text-slate-500 mb-0.5">Cash (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.cash ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          cash: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="input-field text-xs py-1 px-1.5 font-mono font-bold text-right"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9.5px] uppercase font-bold text-slate-500 mb-0.5">Online 1 (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.online1 ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          online1: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="input-field text-xs py-1 px-1.5 font-mono font-bold text-right"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9.5px] uppercase font-bold text-slate-500 mb-0.5">Online 2 (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.online2 ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          online2: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="input-field text-xs py-1 px-1.5 font-mono font-bold text-right"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9.5px] uppercase font-bold text-slate-500 mb-0.5">Online 3 (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.online3 ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          online3: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="input-field text-xs py-1 px-1.5 font-mono font-bold text-right"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9.5px] uppercase font-bold text-amber-700 mb-0.5">Udhar / Due (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.udhar ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          udhar: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="input-field text-xs py-1 px-1.5 font-mono font-bold text-right bg-amber-50/50 border-amber-200 text-amber-900"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Row 2: Line Items Table */}

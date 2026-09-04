@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDb } from '../../context/DbContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { Bill, BillItem, BillType, Customer, Product } from '../../types';
+import { Bill, BillItem, BillType, Customer, Product, PaymentSplit } from '../../types';
 import { numberToIndianWords } from '../../utils/numberToWords';
 import { formatDateInput, formatDate } from '../../utils/formatters';
 import { SearchableCombobox, ComboboxOption } from '../common/SearchableCombobox';
@@ -23,7 +23,10 @@ import {
   Download,
   Image as ImageIcon,
   MessageCircle,
-  Globe
+  Globe,
+  Banknote,
+  AlertCircle,
+  Layers
 } from 'lucide-react';
 
 interface BillingScreenProps {
@@ -56,8 +59,15 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
   // Assigned Worker
   const [assignedWorkerId, setAssignedWorkerId] = useState<string>('');
 
-  // Payment info
+  // Payment info (Udhar is strictly for mechanics; retail customers must settle in full)
+  const [paymentMode, setPaymentMode] = useState<'Cash' | 'Online 1' | 'Online 2' | 'Online 3' | 'Split'>('Cash');
   const [paidAmount, setPaidAmount] = useState<string>('');
+  const [splitPayment, setSplitPayment] = useState<PaymentSplit>({
+    cash: 0,
+    online1: 0,
+    online2: 0,
+    online3: 0
+  });
 
   // Conditions
   const [conditions, setConditions] = useState<string>(settings.default_conditions);
@@ -100,7 +110,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     return products.map((p) => ({
       id: p.id,
       label: p.name,
-      subLabel: `${p.sku ? `[${p.sku}] ` : ''}${p.hsn_code ? `HSN: ${p.hsn_code} | ` : ''}Stock: ${p.stock_qty} ${p.unit}`,
+      subLabel: `${p.type || p.sku ? `[${p.type || p.sku}] ` : ''}${p.hsn_code ? `HSN: ${p.hsn_code} | ` : ''}Stock: ${p.stock_qty} ${p.unit}`,
       badge: `₹${p.selling_price}`,
       badgeColor:
         p.stock_qty <= (p.min_stock_alert || 5)
@@ -275,8 +285,39 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     }
 
     const assignedWorker = workers.find(w => w.id === assignedWorkerId);
-    const paidVal = paidAmount ? parseFloat(paidAmount) : grandTotal;
-    const paymentStatus = paidVal >= grandTotal ? 'PAID' : paidVal > 0 ? 'PARTIAL' : 'UNPAID';
+
+    let finalPaid = grandTotal;
+    let splitObj: PaymentSplit | undefined = undefined;
+
+    if (paymentMode === 'Split') {
+      const splitSum =
+        (splitPayment.cash || 0) +
+        (splitPayment.online1 || 0) +
+        (splitPayment.online2 || 0) +
+        (splitPayment.online3 || 0);
+
+      if (Math.abs(splitSum - grandTotal) > 0.5) {
+        alert(
+          `Split payment sum (₹${splitSum.toFixed(2)}) must equal the Grand Total (₹${grandTotal.toFixed(
+            2
+          )}).\n\nUdhar credit is strictly reserved for mechanics. Retail invoices must be settled in full.`
+        );
+        return;
+      }
+      finalPaid = splitSum;
+      splitObj = { ...splitPayment };
+    } else {
+      const enteredPaid = paidAmount ? parseFloat(paidAmount) : grandTotal;
+      if (enteredPaid < grandTotal) {
+        alert(
+          `Udhar credit is strictly restricted to mechanics.\n\nCustomer invoices must be settled in full (₹${grandTotal.toFixed(
+            2
+          )}). If the customer is paying partly cash and online, please select the "Split Payment" mode.`
+        );
+        return;
+      }
+      finalPaid = grandTotal;
+    }
 
     const billData: Omit<Bill, 'id' | 'created_at'> = {
       invoice_num: invoiceNum.trim() || '981',
@@ -300,9 +341,11 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
       condition_apply: conditions,
       assigned_worker_id: assignedWorkerId || undefined,
       assigned_worker_name: assignedWorker?.name || undefined,
-      payment_status: paymentStatus,
-      paid_amount: paidVal,
-      due_amount: Math.max(0, grandTotal - paidVal)
+      payment_status: 'PAID',
+      paid_amount: finalPaid,
+      due_amount: 0,
+      payment_mode: paymentMode,
+      split_payment: splitObj
     };
 
     const saved = createBill(billData);
@@ -405,7 +448,9 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
     setCustomerDues(0);
     setCustomerSearchQuery('');
     setBrandModelNo('');
+    setPaymentMode('Cash');
     setPaidAmount('');
+    setSplitPayment({ cash: 0, online1: 0, online2: 0, online3: 0 });
     setItems([
       {
         id: 'item_' + Date.now(),
@@ -734,66 +779,216 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onBillCreated }) =
             </button>
           </div>
 
-          {/* Front Section: Live Grand Total & Instant Payment / Save Strip */}
-          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            {/* Left: Amount Paid & Dues Balance */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-bold text-slate-700">{t('bill_amount_received')}:</span>
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1 text-xs text-slate-400 font-bold">₹</span>
-                  <input
-                    type="number"
-                    placeholder={`${grandTotal.toFixed(0)}`}
-                    value={paidAmount}
-                    onChange={(e) => setPaidAmount(e.target.value)}
-                    className="w-28 pl-5 pr-2 py-1 text-xs font-bold text-emerald-800 border border-slate-300 rounded focus:ring-1 focus:ring-emerald-600 bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Status pill */}
-              {(() => {
-                const paidVal = paidAmount === '' ? grandTotal : parseFloat(paidAmount) || 0;
-                const due = Math.max(0, grandTotal - paidVal);
-                return due > 0 ? (
-                  <span className="text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full">
-                    Due: ₹{due.toFixed(2)} (Udhar)
-                  </span>
-                ) : (
-                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">
-                    ✓ Fully Paid
-                  </span>
-                );
-              })()}
-            </div>
-
-            {/* Right: Grand Total & Instant Save & Print Button */}
-            <div className="flex items-center gap-3 justify-end">
-              {isGST && (
-                <div className="hidden md:flex items-center gap-3 text-xs text-slate-500 font-medium">
-                  <span>Taxable: ₹{totalTaxable.toFixed(2)}</span>
-                  <span>GST: ₹{(totalCgst + totalSgst).toFixed(2)}</span>
-                </div>
-              )}
-
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block leading-none">Grand Total</span>
-                <span className="text-lg sm:text-xl font-black text-slate-900 font-mono">
-                  ₹{grandTotal.toFixed(2)}
+          {/* Front Section: Live Grand Total & Payment Mode / Split / Save Strip */}
+          <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+              {/* Left: Payment Mode Selector */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-600 uppercase mr-1">
+                  Payment Mode:
                 </span>
+                {(['Cash', 'Online 1', 'Online 2', 'Online 3', 'Split'] as const).map((mode) => (
+                  <button
+                    type="button"
+                    key={mode}
+                    onClick={() => {
+                      setPaymentMode(mode);
+                      if (mode === 'Split') {
+                        // Pre-fill cash with grandTotal by default
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          cash: grandTotal,
+                          online1: 0,
+                          online2: 0,
+                          online3: 0
+                        }));
+                      }
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      paymentMode === mode
+                        ? mode === 'Split'
+                          ? 'bg-purple-700 text-white shadow-xs'
+                          : mode === 'Cash'
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-blue-700 text-white shadow-xs'
+                        : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    {mode === 'Cash' && <Banknote className="w-3.5 h-3.5" />}
+                    {(mode === 'Online 1' || mode === 'Online 2' || mode === 'Online 3') && <Globe className="w-3.5 h-3.5" />}
+                    {mode === 'Split' && <Layers className="w-3.5 h-3.5" />}
+                    <span>{mode}</span>
+                  </button>
+                ))}
+
+                {paymentMode !== 'Split' && (
+                  <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-full ml-1.5">
+                    ✓ Full Payment (No Udhar)
+                  </span>
+                )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleSaveBill(true)}
-                className="btn-primary text-xs px-4 py-2 bg-[#0F2942] hover:bg-[#1e3a5f] text-white flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
-                title="Save and open print preview immediately"
-              >
-                <Printer className="w-4 h-4" />
-                <span className="font-bold">Save &amp; Print</span>
-              </button>
+              {/* Right: Grand Total & Instant Save & Print Button */}
+              <div className="flex items-center gap-3 justify-end w-full lg:w-auto">
+                {isGST && (
+                  <div className="hidden md:flex items-center gap-3 text-xs text-slate-500 font-medium">
+                    <span>Taxable: ₹{totalTaxable.toFixed(2)}</span>
+                    <span>GST: ₹{(totalCgst + totalSgst).toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block leading-none">Grand Total</span>
+                  <span className="text-lg sm:text-xl font-black text-slate-900 font-mono">
+                    ₹{grandTotal.toFixed(2)}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveBill(true)}
+                  className="btn-primary text-xs px-4 py-2 bg-[#0F2942] hover:bg-[#1e3a5f] text-white flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                  title="Save and open print preview immediately"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="font-bold">Save &amp; Print</span>
+                </button>
+              </div>
             </div>
+
+            {/* Split Payment Details Panel */}
+            {paymentMode === 'Split' && (
+              <div className="p-3 bg-white rounded-lg border border-purple-200 shadow-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-bold text-slate-800">Split Breakdown</span>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      (Divide total ₹{grandTotal.toFixed(2)} across payment channels)
+                    </span>
+                  </div>
+
+                  {/* Split Validation Pill */}
+                  {(() => {
+                    const splitSum =
+                      (splitPayment.cash || 0) +
+                      (splitPayment.online1 || 0) +
+                      (splitPayment.online2 || 0) +
+                      (splitPayment.online3 || 0);
+                    const diff = Math.round((grandTotal - splitSum) * 100) / 100;
+
+                    if (Math.abs(diff) < 0.01) {
+                      return (
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-emerald-600" />
+                          <span>Matched ₹{splitSum.toFixed(2)} (100%)</span>
+                        </span>
+                      );
+                    } else if (diff > 0) {
+                      return (
+                        <span className="text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-amber-600" />
+                          <span>Remaining: ₹{diff.toFixed(2)}</span>
+                        </span>
+                      );
+                    } else {
+                      return (
+                        <span className="text-[11px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-rose-600" />
+                          <span>Exceeded by: ₹{Math.abs(diff).toFixed(2)}</span>
+                        </span>
+                      );
+                    }
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {/* Cash */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">
+                      Cash (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.cash ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          cash: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="w-full px-2 py-1 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-1 focus:ring-purple-600 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Online 1 */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">
+                      Online 1 (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.online1 ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          online1: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="w-full px-2 py-1 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-1 focus:ring-purple-600 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Online 2 */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">
+                      Online 2 (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.online2 ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          online2: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="w-full px-2 py-1 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-1 focus:ring-purple-600 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Online 3 */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">
+                      Online 3 (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={splitPayment.online3 ?? 0}
+                      onChange={(e) =>
+                        setSplitPayment((prev) => ({
+                          ...prev,
+                          online3: parseFloat(e.target.value) || 0
+                        }))
+                      }
+                      className="w-full px-2 py-1 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-1 focus:ring-purple-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-400 italic">
+                  * Customer invoices must be settled in full. Udhar is not permitted for retail customers.
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

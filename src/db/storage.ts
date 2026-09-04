@@ -4,6 +4,7 @@ import {
   Section,
   Worker,
   Mechanic,
+  AMCContract,
   ShopSettings,
   User,
   Bill,
@@ -22,6 +23,7 @@ import {
   INITIAL_SECTIONS,
   INITIAL_WORKERS,
   INITIAL_MECHANICS,
+  INITIAL_AMC_CONTRACTS,
   INITIAL_CUSTOMERS,
   INITIAL_PRODUCTS
 } from './initialData';
@@ -37,6 +39,8 @@ const STORAGE_KEYS = {
   STOCK_MOVEMENTS: 'starline_stock_movements',
   WORKERS: 'starline_workers',
   MECHANICS: 'starline_mechanics',
+  AMC_CONTRACTS: 'starline_amc_contracts',
+  AMC_COUNTER: 'starline_amc_counter',
   ACTIVE_USER: 'starline_active_user',
   SERVICE_RECORDS: 'starline_service_records',
   APP_NOTES: 'starline_app_notes',
@@ -80,6 +84,9 @@ class StorageEngine {
     }
     if (!localStorage.getItem(STORAGE_KEYS.MECHANICS)) {
       this.set(STORAGE_KEYS.MECHANICS, INITIAL_MECHANICS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.AMC_CONTRACTS)) {
+      this.set(STORAGE_KEYS.AMC_CONTRACTS, INITIAL_AMC_CONTRACTS);
     }
     if (!localStorage.getItem(STORAGE_KEYS.CUSTOMERS)) {
       this.set(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
@@ -682,31 +689,58 @@ class StorageEngine {
     const noteId = 'cn_' + Date.now();
 
     // 1. Replenish product inventory
+    const products = this.get<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+    let targetProd: Product | undefined;
     if (noteData.product_id) {
-      const products = this.get<Product[]>(STORAGE_KEYS.PRODUCTS, []);
-      const prod = products.find(p => p.id === noteData.product_id);
-      if (prod) {
-        prod.stock_qty += noteData.qty;
-        prod.updated_at = now;
-        this.set(STORAGE_KEYS.PRODUCTS, products);
+      targetProd = products.find(p => p.id === noteData.product_id);
+    }
+    if (!targetProd && noteData.item_description) {
+      const descTrim = noteData.item_description.trim().toLowerCase();
+      targetProd = products.find(p => p.name.toLowerCase() === descTrim);
+    }
 
-        this.recordStockMovement({
-          id: 'sm_cn_' + Date.now(),
-          product_id: prod.id,
-          product_name: prod.name,
-          change_qty: noteData.qty,
-          new_balance: prod.stock_qty,
-          type: 'RETURN',
-          reference_id: noteData.note_num,
-          notes: `Credit Note #${noteData.note_num} return`,
-          created_at: now
-        });
+    if (targetProd) {
+      targetProd.stock_qty += noteData.qty;
+      targetProd.updated_at = now;
+      this.set(STORAGE_KEYS.PRODUCTS, products);
+
+      this.recordStockMovement({
+        id: 'sm_cn_' + Date.now(),
+        product_id: targetProd.id,
+        product_name: targetProd.name,
+        change_qty: noteData.qty,
+        new_balance: targetProd.stock_qty,
+        type: 'RETURN',
+        reference_id: noteData.note_num,
+        notes: `Credit Note #${noteData.note_num} return (${noteData.original_invoice_num})`,
+        created_at: now
+      });
+    }
+
+    // 2. Reduce customer dues or mechanic dues
+    if (noteData.customer_id) {
+      this.updateCustomerDues(noteData.customer_id, -noteData.total_value);
+      const mechanics = this.getMechanics();
+      if (mechanics.some(m => m.id === noteData.customer_id)) {
+        this.updateMechanicDues(noteData.customer_id, -noteData.total_value);
       }
     }
 
-    // 2. Reduce customer dues
-    if (noteData.customer_id) {
-      this.updateCustomerDues(noteData.customer_id, -noteData.total_value);
+    // Check if original bill was a B2B bill to adjust mechanic dues
+    const b2bBills = this.getB2BBills();
+    const matchedB2B = b2bBills.find(b => b.id === noteData.original_bill_id || b.invoice_num === noteData.original_invoice_num);
+    if (matchedB2B) {
+      if (matchedB2B.mechanic_id) {
+        this.updateMechanicDues(matchedB2B.mechanic_id, -noteData.total_value);
+      }
+      const phone = (matchedB2B.mechanic_phone || matchedB2B.customer_mobile || '').trim();
+      if (phone) {
+        const custs = this.getCustomers();
+        const cust = custs.find(c => c.mobile.trim() === phone);
+        if (cust) {
+          this.updateCustomerDues(cust.id, -noteData.total_value);
+        }
+      }
     }
 
     // 3. Save credit note
@@ -916,6 +950,38 @@ class StorageEngine {
     }
   }
 
+  // --- AMC CONTRACTS ---
+  public getAMCContracts(): AMCContract[] {
+    return this.get<AMCContract[]>(STORAGE_KEYS.AMC_CONTRACTS, []);
+  }
+
+  public getNextAMCContractNum(): string {
+    const counter = this.get<number>(STORAGE_KEYS.AMC_COUNTER, 103);
+    return `AMC-${counter}`;
+  }
+
+  public saveAMCContract(contract: AMCContract): AMCContract {
+    const contracts = this.getAMCContracts();
+    const idx = contracts.findIndex(c => c.id === contract.id);
+    const now = new Date().toISOString();
+    let saved: AMCContract;
+    if (idx >= 0) {
+      saved = { ...contract, updated_at: now };
+      contracts[idx] = saved;
+    } else {
+      saved = { ...contract, created_at: contract.created_at || now, updated_at: now };
+      contracts.unshift(saved);
+      const counter = this.get<number>(STORAGE_KEYS.AMC_COUNTER, 103);
+      this.set(STORAGE_KEYS.AMC_COUNTER, counter + 1);
+    }
+    this.set(STORAGE_KEYS.AMC_CONTRACTS, contracts);
+    return saved;
+  }
+
+  public deleteAMCContract(id: string): void {
+    this.set(STORAGE_KEYS.AMC_CONTRACTS, this.getAMCContracts().filter(c => c.id !== id));
+  }
+
   // --- STOCK ALERT ACKNOWLEDGEMENT ---
   public getAcknowledgedStockAlerts(): string[] {
     return this.get<string[]>(STORAGE_KEYS.ACKNOWLEDGED_STOCK_ALERTS, []);
@@ -955,6 +1021,7 @@ class StorageEngine {
       sections: this.getSections(),
       workers: this.getWorkers(),
       mechanics: this.getMechanics(),
+      amc_contracts: this.getAMCContracts(),
       customers: this.getCustomers(),
       products: this.getProducts('super_admin'),
       bills: this.getBills(),
@@ -973,6 +1040,7 @@ class StorageEngine {
       if (data.sections) this.set(STORAGE_KEYS.SECTIONS, data.sections);
       if (data.workers) this.set(STORAGE_KEYS.WORKERS, data.workers);
       if (data.mechanics) this.set(STORAGE_KEYS.MECHANICS, data.mechanics);
+      if (data.amc_contracts) this.set(STORAGE_KEYS.AMC_CONTRACTS, data.amc_contracts);
       if (data.customers) this.set(STORAGE_KEYS.CUSTOMERS, data.customers);
       if (data.products) this.set(STORAGE_KEYS.PRODUCTS, data.products);
       if (data.bills) this.set(STORAGE_KEYS.BILLS, data.bills);

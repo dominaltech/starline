@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 export const AnalyticsDashboard: React.FC = () => {
-  const { bills, products, customers, workers } = useDb();
+  const { bills, b2bBills, products, customers, workers } = useDb();
   const { isSuperAdmin, role } = useAuth();
 
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -57,9 +57,37 @@ export const AnalyticsDashboard: React.FC = () => {
     return true;
   });
 
-  // Key Aggregations
-  const totalRevenue = filteredBills.reduce((acc, b) => acc + b.grand_total, 0);
-  const totalBillsCount = filteredBills.length;
+  // Filter B2B bills by selected time range
+  const filteredB2BBills = b2bBills.filter(b => {
+    if (timeRange === 'ALL') return true;
+
+    const bDate = new Date(b.bill_date);
+    if (isNaN(bDate.getTime())) return true;
+
+    if (timeRange === '30D') {
+      const past30 = new Date(now);
+      past30.setDate(now.getDate() - 30);
+      return bDate >= past30;
+    }
+    if (timeRange === '6M') {
+      const past6m = new Date(now);
+      past6m.setMonth(now.getMonth() - 6);
+      return bDate >= past6m;
+    }
+    if (timeRange === '1Y') {
+      const past1y = new Date(now);
+      past1y.setFullYear(now.getFullYear() - 1);
+      return bDate >= past1y;
+    }
+    return true;
+  });
+
+  // Key Aggregations (Combined Retail + B2B)
+  const retailRevenue = filteredBills.reduce((acc, b) => acc + b.grand_total, 0);
+  const b2bRevenue = filteredB2BBills.reduce((acc, b) => acc + b.total_amount, 0);
+  const totalRevenue = retailRevenue + b2bRevenue;
+
+  const totalBillsCount = filteredBills.length + filteredB2BBills.length;
   const estimateBills = filteredBills.filter(b => b.bill_type === 'ESTIMATE');
   const gstBills = filteredBills.filter(b => b.bill_type === 'GST');
 
@@ -68,7 +96,7 @@ export const AnalyticsDashboard: React.FC = () => {
 
   const avgTicketSize = totalBillsCount > 0 ? totalRevenue / totalBillsCount : 0;
 
-  // Cost and Profit (Super Admin only)
+  // Cost and Profit (Super Admin only - both Retail and B2B)
   let totalCost = 0;
   if (isSuperAdmin) {
     filteredBills.forEach(b => {
@@ -79,12 +107,20 @@ export const AnalyticsDashboard: React.FC = () => {
         }
       });
     });
+    filteredB2BBills.forEach(b => {
+      b.items.forEach(it => {
+        const p = it.product_id
+          ? products.find(prod => prod.id === it.product_id)
+          : products.find(prod => prod.name.toLowerCase() === (it.product_name || '').trim().toLowerCase());
+        totalCost += (p?.buy_price || 0) * it.qty;
+      });
+    });
   }
   const grossProfit = totalRevenue - totalCost;
   const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   // Monthly Revenue Grouping for Bar Chart
-  const monthlyData: Record<string, { label: string; revenue: number; count: number; gstRev: number; estimateRev: number }> = {};
+  const monthlyData: Record<string, { label: string; revenue: number; count: number; gstRev: number; estimateRev: number; b2bRev: number }> = {};
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   // Initialize last 6 months buckets
@@ -96,10 +132,12 @@ export const AnalyticsDashboard: React.FC = () => {
       revenue: 0,
       count: 0,
       gstRev: 0,
-      estimateRev: 0
+      estimateRev: 0,
+      b2bRev: 0
     };
   }
 
+  // Aggregate Retail Bills into Monthly Buckets
   filteredBills.forEach(b => {
     if (!b.invoice_date) return;
     const parts = b.invoice_date.split('-');
@@ -112,7 +150,8 @@ export const AnalyticsDashboard: React.FC = () => {
           revenue: 0,
           count: 0,
           gstRev: 0,
-          estimateRev: 0
+          estimateRev: 0,
+          b2bRev: 0
         };
       }
       monthlyData[key].revenue += b.grand_total;
@@ -125,10 +164,33 @@ export const AnalyticsDashboard: React.FC = () => {
     }
   });
 
+  // Aggregate B2B Bills into Monthly Buckets
+  filteredB2BBills.forEach(b => {
+    if (!b.bill_date) return;
+    const parts = b.bill_date.split('-');
+    if (parts.length >= 2) {
+      const key = `${parts[0]}-${parts[1]}`;
+      if (!monthlyData[key]) {
+        const monIdx = parseInt(parts[1], 10) - 1;
+        monthlyData[key] = {
+          label: `${monthNames[monIdx] || parts[1]} ${parts[0].slice(-2)}`,
+          revenue: 0,
+          count: 0,
+          gstRev: 0,
+          estimateRev: 0,
+          b2bRev: 0
+        };
+      }
+      monthlyData[key].revenue += b.total_amount;
+      monthlyData[key].count += 1;
+      monthlyData[key].b2bRev += b.total_amount;
+    }
+  });
+
   const chartMonths = Object.entries(monthlyData).slice(-6);
   const maxMonthRev = Math.max(...chartMonths.map(([, v]) => v.revenue), 1000);
 
-  // Top Selling Products Calculation
+  // Top Selling Products Calculation (Retail + B2B Spares)
   const productSalesMap: Record<string, { name: string; qty: number; revenue: number }> = {};
   filteredBills.forEach(b => {
     b.items.forEach(it => {
@@ -139,6 +201,18 @@ export const AnalyticsDashboard: React.FC = () => {
       }
       productSalesMap[key].qty += it.qty;
       productSalesMap[key].revenue += it.amount;
+    });
+  });
+
+  filteredB2BBills.forEach(b => {
+    b.items.forEach(it => {
+      const key = (it.product_name || '').trim();
+      if (!key) return;
+      if (!productSalesMap[key]) {
+        productSalesMap[key] = { name: key, qty: 0, revenue: 0 };
+      }
+      productSalesMap[key].qty += it.qty;
+      productSalesMap[key].revenue += it.total;
     });
   });
 
@@ -309,7 +383,7 @@ export const AnalyticsDashboard: React.FC = () => {
               </div>
             </div>
             <div className="mt-3 text-xs text-slate-500">
-              {estimateBills.length} Retail + {gstBills.length} GST Invoices
+              {estimateBills.length} Retail + {gstBills.length} GST + {filteredB2BBills.length} B2B Bills
             </div>
           </div>
 
@@ -364,17 +438,21 @@ export const AnalyticsDashboard: React.FC = () => {
                   <BarChart3 className="w-4 h-4 text-blue-900" />
                   <span>Monthly Revenue Trend (Last 6 Months)</span>
                 </h3>
-                <p className="text-[11px] text-slate-400">Comparing GST Tax Invoices vs Retail Estimates</p>
+                <p className="text-[11px] text-slate-400">Comparing GST Invoices, Retail Estimates & B2B Trade</p>
               </div>
 
               <div className="flex items-center gap-3 text-xs">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-xs bg-[#0F2942]"></div>
-                  <span className="text-slate-600 font-medium">GST Invoices</span>
+                  <span className="text-slate-600 font-medium">GST</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-xs bg-slate-300"></div>
-                  <span className="text-slate-600 font-medium">Retail Estimates</span>
+                  <span className="text-slate-600 font-medium">Retail</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-xs bg-blue-600"></div>
+                  <span className="text-slate-600 font-medium">B2B Trade</span>
                 </div>
               </div>
             </div>
@@ -384,8 +462,10 @@ export const AnalyticsDashboard: React.FC = () => {
               {chartMonths.map(([key, data]) => {
                 const totalH = Math.max(12, (data.revenue / maxMonthRev) * 190);
                 const gstRatio = data.revenue > 0 ? data.gstRev / data.revenue : 0;
+                const estRatio = data.revenue > 0 ? data.estimateRev / data.revenue : 0;
                 const gstH = totalH * gstRatio;
-                const estH = totalH - gstH;
+                const estH = totalH * estRatio;
+                const b2bH = Math.max(0, totalH - gstH - estH);
                 const isHovered = hoveredMonth === key;
 
                 return (
@@ -400,22 +480,30 @@ export const AnalyticsDashboard: React.FC = () => {
                       <div className="absolute -top-14 z-20 bg-slate-900 text-white text-[11px] px-2.5 py-1.5 rounded shadow-lg whitespace-nowrap text-center animate-fade-in font-mono">
                         <div className="font-bold">{formatCurrency(data.revenue)}</div>
                         <div className="text-[9.5px] text-slate-300">
-                          {data.count} bills (GST: {formatCurrency(data.gstRev)})
+                          {data.count} bills (GST: {formatCurrency(data.gstRev)}, Ret: {formatCurrency(data.estimateRev)}, B2B: {formatCurrency(data.b2bRev || 0)})
                         </div>
                       </div>
                     )}
 
                     {/* Stacked Bars */}
                     <div className="w-full max-w-[48px] flex flex-col justify-end items-center rounded-t-md overflow-hidden bg-slate-100 transition-all group-hover:opacity-90">
-                      {/* Retail Estimate bar top */}
+                      {/* B2B Trade bar top */}
+                      <div
+                        style={{ height: `${b2bH}px` }}
+                        className="w-full bg-blue-600 transition-all duration-300"
+                        title="B2B Mechanic Trade"
+                      />
+                      {/* Retail Estimate bar middle */}
                       <div
                         style={{ height: `${estH}px` }}
                         className="w-full bg-slate-300 transition-all duration-300"
+                        title="Retail Estimates"
                       />
                       {/* GST bar bottom */}
                       <div
                         style={{ height: `${gstH}px` }}
                         className="w-full bg-[#0F2942] transition-all duration-300"
+                        title="GST Invoices"
                       />
                     </div>
 
@@ -435,7 +523,7 @@ export const AnalyticsDashboard: React.FC = () => {
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <PieIcon className="w-4 h-4 text-blue-900" />
-                  <span>GST vs Estimate Split</span>
+                  <span>Revenue by Trade Channel</span>
                 </h3>
                 <span className="text-[11px] text-slate-400 font-mono">{totalBillsCount} total</span>
               </div>
@@ -459,12 +547,22 @@ export const AnalyticsDashboard: React.FC = () => {
                     strokeDasharray={`${totalRevenue > 0 ? (gstRevenue / totalRevenue) * 100 : 0}, 100`}
                     strokeLinecap="round"
                   />
+                  {/* B2B Segment */}
+                  <path
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke="#2563EB"
+                    strokeWidth="4.2"
+                    strokeDasharray={`${totalRevenue > 0 ? (b2bRevenue / totalRevenue) * 100 : 0}, 100`}
+                    strokeDashoffset={`-${totalRevenue > 0 ? (gstRevenue / totalRevenue) * 100 : 0}`}
+                    strokeLinecap="round"
+                  />
                 </svg>
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <span className="text-xs text-slate-400 uppercase font-semibold">GST Share</span>
-                  <span className="text-xl font-black text-slate-900 font-mono">
-                    {totalRevenue > 0 ? `${((gstRevenue / totalRevenue) * 100).toFixed(0)}%` : '0%'}
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Revenue</span>
+                  <span className="text-sm font-black text-slate-900 font-mono">
+                    {formatCurrency(totalRevenue)}
                   </span>
                 </div>
               </div>
@@ -475,7 +573,7 @@ export const AnalyticsDashboard: React.FC = () => {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-[#0F2942]" />
-                  <span className="font-semibold text-slate-700">GST Tax Invoices</span>
+                  <span className="font-semibold text-slate-700">GST Invoices</span>
                 </div>
                 <div className="text-right">
                   <span className="font-bold text-slate-900">{formatCurrency(gstRevenue)}</span>
@@ -491,6 +589,17 @@ export const AnalyticsDashboard: React.FC = () => {
                 <div className="text-right">
                   <span className="font-bold text-slate-900">{formatCurrency(estimateRevenue)}</span>
                   <span className="text-[10.5px] text-slate-400 block font-mono">{estimateBills.length} bills</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-600" />
+                  <span className="font-semibold text-slate-700">B2B Mechanic</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold text-slate-900">{formatCurrency(b2bRevenue)}</span>
+                  <span className="text-[10.5px] text-slate-400 block font-mono">{filteredB2BBills.length} bills</span>
                 </div>
               </div>
             </div>

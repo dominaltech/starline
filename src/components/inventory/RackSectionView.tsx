@@ -133,8 +133,8 @@ export const RackSectionView: React.FC = () => {
                     >
                       <div className="pr-2">
                         <div className="font-semibold text-slate-800">{p.name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {p.sku || 'No SKU'} • ₹{p.selling_price}
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          {p.type || p.sku || 'No Type'} • ₹{p.selling_price}
                         </div>
                       </div>
                       <span className="font-mono font-bold text-slate-900 bg-white border border-slate-300 px-2 py-0.5 rounded shrink-0">
@@ -175,7 +175,7 @@ export const RackSectionView: React.FC = () => {
                 >
                   <div>
                     <div className="font-semibold text-slate-800">{p.name}</div>
-                    <div className="text-[10px] text-slate-400">{p.sku || 'No SKU'}</div>
+                    <div className="text-[10px] text-slate-500 font-medium">{p.type || p.sku || 'No Type'}</div>
                   </div>
                   <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
                     {p.stock_qty} {p.unit}
